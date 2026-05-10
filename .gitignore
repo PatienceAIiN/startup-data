@@ -46,3 +46,9 @@ coverage/
 # Logs
 *.log
 ng-serve.log
+
+# Transient session files
+admin_token.txt
+job_id.txt
+backend/backend.log
+frontend/ng-serve.log

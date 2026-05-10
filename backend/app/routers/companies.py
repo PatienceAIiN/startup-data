@@ -35,10 +35,17 @@ async def list_companies(
     filters = []
     if search:
         filters.append(MatchedCompany.company_name.ilike(f"%{search}%"))
+    from sqlalchemy import or_
     if date_from:
-        filters.append(MatchedCompany.date_of_incorporation >= date_from)
+        filters.append(or_(
+            MatchedCompany.date_of_incorporation >= date_from,
+            MatchedCompany.date_of_incorporation.is_(None),
+        ))
     if date_to:
-        filters.append(MatchedCompany.date_of_incorporation <= date_to)
+        filters.append(or_(
+            MatchedCompany.date_of_incorporation <= date_to,
+            MatchedCompany.date_of_incorporation.is_(None),
+        ))
     if state:
         filters.append(MatchedCompany.state.ilike(f"%{state}%"))
     if status:
@@ -48,9 +55,7 @@ async def list_companies(
     if min_score is not None:
         filters.append(MatchedCompany.match_score >= min_score)
 
-    if not date_from and not date_to and not search:
-        default_from = (datetime.utcnow() - timedelta(days=365 * 3)).date()
-        filters.append(MatchedCompany.date_of_incorporation >= default_from)
+    # No default date filter — show all companies including those with NULL inc dates
 
     for f in filters:
         query = query.where(f)

@@ -21,8 +21,22 @@ def get_r2_client():
     )
 
 
+def _ensure_bucket(client) -> None:
+    try:
+        client.head_bucket(Bucket=settings.R2_BUCKET_NAME)
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code")
+        if code in ("404", "NoSuchBucket", "NoSuchKey"):
+            try:
+                client.create_bucket(Bucket=settings.R2_BUCKET_NAME)
+                log.info("r2_bucket.created", bucket=settings.R2_BUCKET_NAME)
+            except ClientError as ce:
+                log.error("r2_bucket.create_failed", error=str(ce))
+
+
 async def upload_file_to_r2(local_path: str, r2_key: str, content_type: str = "application/octet-stream") -> str:
     client = get_r2_client()
+    _ensure_bucket(client)
     try:
         with open(local_path, "rb") as f:
             client.put_object(

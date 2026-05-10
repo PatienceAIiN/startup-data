@@ -6,6 +6,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from app.config import settings
 from app.routers import auth, companies, scraper, exports
+from app.services.scheduler_service import start_scheduler, stop_scheduler
 import structlog
 
 log = structlog.get_logger()
@@ -15,7 +16,15 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIM
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("startup", env=settings.APP_ENV)
+    try:
+        start_scheduler()
+    except Exception as e:
+        log.error("scheduler_start_failed", error=str(e))
     yield
+    try:
+        stop_scheduler()
+    except Exception:
+        pass
     log.info("shutdown")
 
 

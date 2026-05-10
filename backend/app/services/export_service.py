@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import tempfile
 from datetime import datetime
 from typing import Optional
 import openpyxl
@@ -111,7 +112,7 @@ async def create_and_upload_export(
     file_name = f"startupintel_export_{timestamp}.{file_type}"
     r2_key = f"exports/{user_id}/{file_name}"
 
-    tmp_path = f"/tmp/{file_name}"
+    tmp_path = os.path.join(tempfile.gettempdir(), file_name)
     try:
         if file_type == "csv":
             data = generate_csv_bytes(companies)
