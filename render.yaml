@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: startupintel-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: standard
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_SYNC
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 60
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: 7
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: startupintel-exports
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: FRONTEND_URL
+        value: https://startupintel-frontend.onrender.com
+      - key: CORS_ORIGINS
+        value: '["https://startupintel-frontend.onrender.com"]'
+      - key: DATAGOV_API_KEY
+        sync: false
+      - key: SCRAPE_MAX_PAGES
+        value: 50
+      - key: MATCH_CONFIDENCE_THRESHOLD
+        value: 0.75
+
+  - type: web
+    name: startupintel-frontend
+    env: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free

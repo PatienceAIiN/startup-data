@@ -1,0 +1,118 @@
+from datetime import date
+from typing import Optional
+from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.database import get_db
+from app.models.company import MatchedCompany
+from app.models.export_file import ExportFile
+from app.services.auth_service import get_current_user
+from app.services.export_service import create_and_upload_export
+
+router = APIRouter(prefix="/exports", tags=["exports"])
+
+
+@router.post("/{file_type}")
+async def export_companies(
+    file_type: str,
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    state: Optional[str] = Query(None),
+    is_startup: Optional[bool] = Query(None),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    db: AsyncSession = Depends(get_db),
+):
+    if file_type not in ("csv", "xlsx"):
+        raise HTTPException(status_code=400, detail="file_type must be 'csv' or 'xlsx'")
+
+    user = await get_current_user(credentials.credentials, db)
+
+    query = select(MatchedCompany)
+    if date_from:
+        query = query.where(MatchedCompany.date_of_incorporation >= date_from)
+    if date_to:
+        query = query.where(MatchedCompany.date_of_incorporation <= date_to)
+    if state:
+        query = query.where(MatchedCompany.state.ilike(f"%{state}%"))
+    if is_startup is not None:
+        query = query.where(MatchedCompany.is_startup == is_startup)
+
+    query = query.order_by(MatchedCompany.date_of_incorporation.desc()).limit(50000)
+    companies = (await db.execute(query)).scalars().all()
+
+    companies_dicts = [
+        {
+            "cin": c.cin,
+            "company_name": c.company_name,
+            "company_status": c.company_status,
+            "roc_code": c.roc_code,
+            "company_category": c.company_category,
+            "date_of_incorporation": c.date_of_incorporation,
+            "state": c.state,
+            "authorised_capital": c.authorised_capital,
+            "paid_up_capital": c.paid_up_capital,
+            "match_score": c.match_score,
+            "match_method": c.match_method,
+            "is_startup": c.is_startup,
+            "registered_address": c.registered_address,
+        }
+        for c in companies
+    ]
+
+    filter_params = {
+        "date_from": str(date_from) if date_from else None,
+        "date_to": str(date_to) if date_to else None,
+        "state": state,
+        "is_startup": is_startup,
+    }
+
+    export_meta = await create_and_upload_export(
+        companies_dicts, file_type, str(user.id), filter_params
+    )
+
+    ef = ExportFile(
+        exported_by=user.id,
+        file_type=file_type,
+        file_name=export_meta["file_name"],
+        r2_key=export_meta["r2_key"],
+        r2_url=export_meta["r2_url"],
+        file_size_bytes=export_meta["file_size_bytes"],
+        record_count=export_meta["record_count"],
+        filter_params=filter_params,
+    )
+    db.add(ef)
+
+    return {
+        "download_url": export_meta["r2_url"],
+        "file_name": export_meta["file_name"],
+        "record_count": export_meta["record_count"],
+        "file_size_bytes": export_meta["file_size_bytes"],
+        "expires_in_hours": 24,
+    }
+
+
+@router.get("/history")
+async def export_history(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(credentials.credentials, db)
+    result = await db.execute(
+        select(ExportFile)
+        .where(ExportFile.exported_by == user.id)
+        .order_by(ExportFile.created_at.desc())
+        .limit(20)
+    )
+    files = result.scalars().all()
+    return [
+        {
+            "id": str(f.id),
+            "file_name": f.file_name,
+            "file_type": f.file_type,
+            "record_count": f.record_count,
+            "r2_url": f.r2_url,
+            "created_at": f.created_at,
+        }
+        for f in files
+    ]

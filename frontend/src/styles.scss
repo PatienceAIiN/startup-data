@@ -1,0 +1,217 @@
+@import '@angular/material/prebuilt-themes/indigo-pink.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: Roboto, 'Helvetica Neue', sans-serif;
+  background-color: #0f172a;
+  color: #f1f5f9;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   ANGULAR MATERIAL DARK THEME OVERRIDES
+   ============================================================ */
+
+/* Form fields */
+.mat-mdc-form-field {
+  .mdc-notched-outline__leading,
+  .mdc-notched-outline__notch,
+  .mdc-notched-outline__trailing {
+    border-color: #475569 !important;
+  }
+
+  &:hover .mdc-notched-outline__leading,
+  &:hover .mdc-notched-outline__notch,
+  &:hover .mdc-notched-outline__trailing {
+    border-color: #94a3b8 !important;
+  }
+
+  .mdc-text-field--focused .mdc-notched-outline__leading,
+  .mdc-text-field--focused .mdc-notched-outline__notch,
+  .mdc-text-field--focused .mdc-notched-outline__trailing {
+    border-color: #34d399 !important;
+  }
+
+  .mat-mdc-form-field-label,
+  .mdc-floating-label {
+    color: #94a3b8 !important;
+  }
+
+  .mdc-floating-label--float-above {
+    color: #34d399 !important;
+  }
+
+  input.mat-mdc-input-element,
+  textarea.mat-mdc-input-element {
+    color: #f1f5f9 !important;
+    caret-color: #34d399;
+  }
+
+  .mat-mdc-select-value {
+    color: #f1f5f9 !important;
+  }
+
+  .mat-mdc-select-arrow {
+    color: #94a3b8 !important;
+  }
+
+  .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+    background-color: #1e293b !important;
+  }
+}
+
+/* Select panel / dropdown */
+.mat-mdc-select-panel {
+  background-color: #1e293b !important;
+}
+
+.mat-mdc-option {
+  color: #f1f5f9 !important;
+
+  &:hover,
+  &.mat-mdc-option-active {
+    background-color: #334155 !important;
+  }
+
+  &.mdc-list-item--selected {
+    background-color: #064e3b !important;
+    color: #34d399 !important;
+  }
+}
+
+/* Table */
+.mat-mdc-table {
+  background: transparent !important;
+}
+
+.mat-mdc-header-row {
+  background-color: #0f172a !important;
+}
+
+.mat-mdc-row {
+  background: transparent !important;
+
+  &:hover {
+    background-color: rgba(51, 65, 85, 0.5) !important;
+  }
+}
+
+.mat-mdc-header-cell {
+  color: #94a3b8 !important;
+  border-bottom-color: #334155 !important;
+  font-weight: 600;
+}
+
+.mat-mdc-cell {
+  color: #f1f5f9 !important;
+  border-bottom-color: #1e293b !important;
+}
+
+/* Paginator */
+.mat-mdc-paginator {
+  background-color: #1e293b !important;
+  color: #94a3b8 !important;
+}
+
+.mat-mdc-paginator-range-label,
+.mat-mdc-paginator-page-size-label {
+  color: #94a3b8 !important;
+}
+
+.mat-mdc-icon-button {
+  color: #94a3b8 !important;
+
+  &:disabled {
+    color: #334155 !important;
+  }
+}
+
+/* Buttons */
+.mat-mdc-raised-button.mat-primary {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+}
+
+.mat-mdc-stroked-button {
+  border-color: #475569 !important;
+  color: #94a3b8 !important;
+}
+
+/* Cards */
+.mat-mdc-card {
+  background-color: #1e293b !important;
+  border: 1px solid #334155;
+  color: #f1f5f9 !important;
+}
+
+/* Snackbar */
+.mdc-snackbar__surface {
+  background-color: #334155 !important;
+}
+
+.mdc-snackbar__label {
+  color: #f1f5f9 !important;
+}
+
+.mat-mdc-snack-bar-action {
+  color: #34d399 !important;
+}
+
+/* Slide toggle */
+.mat-mdc-slide-toggle {
+  .mdc-form-field > label {
+    color: #94a3b8 !important;
+  }
+}
+
+/* Progress bar */
+.mat-mdc-progress-bar .mdc-linear-progress__buffer-bar {
+  background-color: #334155 !important;
+}
+
+/* Chips */
+.mat-mdc-chip {
+  background-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+/* Spinner */
+.mat-mdc-progress-spinner circle {
+  stroke: #34d399 !important;
+}
+
+/* Dialog */
+.mat-mdc-dialog-container .mdc-dialog__surface {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+/* Tooltip */
+.mdc-tooltip__surface {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
