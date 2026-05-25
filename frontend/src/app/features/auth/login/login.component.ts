@@ -35,7 +35,7 @@ import { AuthService } from '../../../core/services/auth.service';
           <mat-form-field appearance="outline" class="auth-field">
             <mat-label>Email Address</mat-label>
             <mat-icon matPrefix>email</mat-icon>
-            <input matInput type="email" formControlName="email" placeholder="you@company.com" autocomplete="email" />
+            <input matInput type="email" formControlName="email" autocomplete="email" />
             @if (form.get('email')?.invalid && form.get('email')?.touched) {
               <mat-error>Please enter a valid email</mat-error>
             }

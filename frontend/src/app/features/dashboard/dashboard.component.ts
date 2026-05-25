@@ -49,7 +49,6 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
           <span class="logo-icon">🚀</span>
           <div class="logo-stack">
             <span class="logo-title">Nexus Intel</span>
-            <span class="logo-sub">India B2B Intelligence</span>
           </div>
         </div>
 
@@ -1291,10 +1290,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     pageSize: 25,
     dateFrom: undefined,
     dateTo: undefined,
+    isStartup: false,
   };
 
   searchValue = '';
-  startupFilter: 'all' | 'companies' | 'startups' = 'all';
+  startupFilter: 'all' | 'companies' | 'startups' = 'companies';
   filtersOpen = false;
   datePreset: '30d' | '90d' | '1y' | '3y' | 'all' | 'custom' = 'all';
 
@@ -1380,14 +1380,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   resetFilters(): void {
     this.searchValue = '';
-    this.startupFilter = 'all';
+    this.startupFilter = 'companies';
     this.datePreset = 'all';
     this.filter = {
       page: 1,
       pageSize: 25,
       dateFrom: undefined,
       dateTo: undefined,
-      isStartup: undefined,
+      isStartup: false,
     };
     this.loadData();
   }
@@ -1431,7 +1431,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     let n = 0;
     if (this.searchValue) n++;
     if (this.filter.state) n++;
-    if (this.startupFilter !== 'all') n++;
+    if (this.startupFilter !== 'companies') n++;
     if (this.datePreset !== 'all') n++;
     return n;
   }
