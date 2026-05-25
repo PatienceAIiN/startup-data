@@ -1291,6 +1291,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     dateFrom: undefined,
     dateTo: undefined,
     isStartup: false,
+    state: 'MAHARASHTRA',
   };
 
   searchValue = '';
@@ -1361,9 +1362,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   onStateChange(): void {
-    if (this.filter.state && this.filter.state !== 'Maharashtra') {
+    const st = this.filter.state ? this.filter.state.trim().toUpperCase() : '';
+    if (st && st !== 'MAHARASHTRA') {
       const selectedState = this.filter.state;
-      this.filter.state = 'Maharashtra'; // Default back to Maharashtra
+      this.filter.state = 'MAHARASHTRA'; // Default back to Maharashtra
       this.dialog.open(ConfirmDialogComponent, {
         width: '400px',
         data: {
@@ -1404,6 +1406,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       dateFrom: undefined,
       dateTo: undefined,
       isStartup: false,
+      state: 'MAHARASHTRA',
     };
     this.loadData();
   }
