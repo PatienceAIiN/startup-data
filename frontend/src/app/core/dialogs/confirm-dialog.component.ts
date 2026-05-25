@@ -26,7 +26,7 @@ export interface ConfirmDialogData {
       <h2 class="confirm-title">{{ data.title }}</h2>
       <p class="confirm-message">{{ data.message }}</p>
       <div class="confirm-actions">
-        <button mat-stroked-button class="btn-cancel" (click)="cancel()">
+        <button mat-stroked-button class="btn-cancel" (click)="cancel()" *ngIf="data.cancelText !== ''">
           {{ data.cancelText || 'Cancel' }}
         </button>
         <button

@@ -1361,6 +1361,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   onStateChange(): void {
+    if (this.filter.state && this.filter.state !== 'Maharashtra') {
+      const selectedState = this.filter.state;
+      this.filter.state = 'Maharashtra'; // Default back to Maharashtra
+      this.dialog.open(ConfirmDialogComponent, {
+        width: '400px',
+        data: {
+          title: 'State Data Unavailable',
+          message: `Currently data is available for Maharashtra only. We will update data for ${selectedState} soon!`,
+          confirmText: 'Got It',
+          cancelText: '',
+          icon: 'info',
+          variant: 'primary'
+        }
+      });
+      return;
+    }
     this.filter.page = 1;
     this.loadData();
   }
