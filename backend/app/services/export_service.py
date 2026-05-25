@@ -39,7 +39,7 @@ def generate_csv_bytes(companies: list[dict]) -> bytes:
     return output.getvalue().encode("utf-8-sig")
 
 
-def generate_xlsx_bytes(companies: list[dict], sheet_title: str = "StartupIntel Export") -> bytes:
+def generate_xlsx_bytes(companies: list[dict], sheet_title: str = "Nexus Intel Export") -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = sheet_title
@@ -109,7 +109,7 @@ async def create_and_upload_export(
     filter_params: Optional[dict] = None,
 ) -> dict:
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    file_name = f"startupintel_export_{timestamp}.{file_type}"
+    file_name = f"nexus_intel_export_{timestamp}.{file_type}"
     r2_key = f"exports/{user_id}/{file_name}"
 
     tmp_path = os.path.join(tempfile.gettempdir(), file_name)

@@ -75,9 +75,12 @@ async def run_full_scrape(job_id: str, date_from: date, date_to: date):
                     d = m.get("datagov_company") or {}
                     inc_date = z.get("date_of_incorporation")
                     is_startup = False
+                    auth_cap = z.get("authorised_capital") if z.get("authorised_capital") is not None else d.get("authorised_capital")
+                    paid_cap = z.get("paid_up_capital") if z.get("paid_up_capital") is not None else d.get("paid_up_capital")
+                    
                     if inc_date:
                         age_years = (date.today() - inc_date).days / 365
-                        is_startup = age_years <= 10 and (z.get("authorised_capital") or 0) <= 100_000_000
+                        is_startup = age_years <= 10 and (auth_cap or 0) <= 100_000_000
 
                     mc = MatchedCompany(
                         company_name=z["company_name"],
@@ -88,9 +91,9 @@ async def run_full_scrape(job_id: str, date_from: date, date_to: date):
                         roc_code=z.get("roc_code") or d.get("roc_code"),
                         company_category=z.get("company_category") or d.get("company_category"),
                         date_of_incorporation=inc_date,
-                        state=d.get("state"),
-                        authorised_capital=z.get("authorised_capital"),
-                        paid_up_capital=z.get("paid_up_capital"),
+                        state=d.get("state") or z.get("state"),
+                        authorised_capital=auth_cap,
+                        paid_up_capital=paid_cap,
                         registered_address=z.get("registered_address"),
                         is_startup=is_startup,
                         incorporation_year=inc_date.year if inc_date else None,

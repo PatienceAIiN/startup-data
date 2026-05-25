@@ -20,14 +20,15 @@ class DataGovScraper:
         resource_id: str = DATASET_RESOURCE_IDS[0],
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
-        limit_per_page: int = 500,
+        search_query: Optional[str] = None,
+        limit_per_page: int = 50,
     ) -> AsyncGenerator[dict, None]:
         offset = 0
         headers = {}
         if settings.DATAGOV_API_KEY:
             headers["api-key"] = settings.DATAGOV_API_KEY
 
-        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
             while True:
                 params = {
                     "format": "json",
@@ -40,6 +41,8 @@ class DataGovScraper:
                     params["filters[DATE_OF_REGISTRATION][from]"] = date_from.strftime("%Y-%m-%d")
                 if date_to:
                     params["filters[DATE_OF_REGISTRATION][to]"] = date_to.strftime("%Y-%m-%d")
+                if search_query:
+                    params["filters[COMPANY_NAME]"] = search_query
 
                 try:
                     url = f"{settings.DATAGOV_API_URL}{resource_id}"
@@ -85,6 +88,19 @@ class DataGovScraper:
             except Exception:
                 pass
 
+        auth_cap_raw = record.get("AUTHORIZED_CAPITAL") or "0"
+        paid_cap_raw = record.get("PAIDUP_CAPITAL") or "0"
+        
+        try:
+            auth_cap = int(float(auth_cap_raw))
+        except Exception:
+            auth_cap = None
+            
+        try:
+            paid_cap = int(float(paid_cap_raw))
+        except Exception:
+            paid_cap = None
+
         return {
             "cin": (record.get("CIN") or record.get("cin") or "").strip() or None,
             "company_name": name,
@@ -94,5 +110,7 @@ class DataGovScraper:
             "company_category": (record.get("COMPANY_CATEGORY") or "").strip() or None,
             "date_of_incorporation": inc_date,
             "state": (record.get("STATE") or "").strip() or None,
+            "authorised_capital": auth_cap,
+            "paid_up_capital": paid_cap,
             "raw_data": record,
         }

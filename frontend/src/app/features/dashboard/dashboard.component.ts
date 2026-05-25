@@ -48,7 +48,7 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
         <div class="dash-logo">
           <span class="logo-icon">🚀</span>
           <div class="logo-stack">
-            <span class="logo-title">StartupIntel</span>
+            <span class="logo-title">Nexus Intel</span>
             <span class="logo-sub">India B2B Intelligence</span>
           </div>
         </div>
@@ -84,15 +84,8 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
         <div class="page-header">
           <div>
             <h1 class="page-title">Dashboard</h1>
-            <p class="page-subtitle">Real-time Indian company intelligence — scraped daily at 2:00 PM IST</p>
           </div>
           <div class="page-actions">
-            @if (auth.isAdmin()) {
-              <button mat-flat-button class="btn-primary" (click)="triggerScrape()" [disabled]="scraping()">
-                <mat-icon>{{ scraping() ? 'hourglass_top' : 'cloud_sync' }}</mat-icon>
-                <span>{{ scraping() ? 'Scraping…' : 'Run Scrape Now' }}</span>
-              </button>
-            }
           </div>
         </div>
 
@@ -139,7 +132,7 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                 type="text"
                 class="search-input"
                 [(ngModel)]="searchValue"
-                (ngModelChange)="onSearch($event)"
+                (keyup.enter)="executeSearch()"
                 placeholder="Search by company name, CIN, or category…"
               />
               @if (searchValue) {
@@ -147,6 +140,9 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                   <mat-icon>close</mat-icon>
                 </button>
               }
+              <button mat-icon-button class="search-submit-btn" (click)="executeSearch()" matTooltip="Search">
+                <mat-icon>keyboard_return</mat-icon>
+              </button>
             </div>
             <button class="btn-filter-toggle" (click)="filtersOpen = !filtersOpen" [class.active]="filtersOpen">
               <mat-icon>tune</mat-icon>
@@ -245,14 +241,20 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                   <button
                     type="button"
                     class="seg-btn"
-                    [class.active]="!startupOnly"
-                    (click)="setStartupFilter(false)"
-                  >All Companies</button>
+                    [class.active]="startupFilter === 'all'"
+                    (click)="setStartupFilter('all')"
+                  >All</button>
                   <button
                     type="button"
                     class="seg-btn"
-                    [class.active]="startupOnly"
-                    (click)="setStartupFilter(true)"
+                    [class.active]="startupFilter === 'companies'"
+                    (click)="setStartupFilter('companies')"
+                  >Companies Only</button>
+                  <button
+                    type="button"
+                    class="seg-btn"
+                    [class.active]="startupFilter === 'startups'"
+                    (click)="setStartupFilter('startups')"
                   >
                     <mat-icon>rocket_launch</mat-icon>
                     Startups Only
@@ -347,6 +349,25 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                 <td mat-cell *matCellDef="let c">{{ c.date_of_incorporation || '—' }}</td>
               </ng-container>
 
+              <ng-container matColumnDef="company_category">
+                <th mat-header-cell *matHeaderCellDef>Category</th>
+                <td mat-cell *matCellDef="let c">{{ c.company_category || '—' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="authorised_capital">
+                <th mat-header-cell *matHeaderCellDef>Auth. Capital</th>
+                <td mat-cell *matCellDef="let c">
+                  {{ c.authorised_capital ? '₹' + (c.authorised_capital | number) : '—' }}
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="paid_up_capital">
+                <th mat-header-cell *matHeaderCellDef>Paid Capital</th>
+                <td mat-cell *matCellDef="let c">
+                  {{ c.paid_up_capital ? '₹' + (c.paid_up_capital | number) : '—' }}
+                </td>
+              </ng-container>
+
               <ng-container matColumnDef="match_score">
                 <th mat-header-cell *matHeaderCellDef>Match</th>
                 <td mat-cell *matCellDef="let c">
@@ -430,6 +451,11 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
         }
 
       </main>
+
+      <!-- Dashboard Footer -->
+      <footer class="dash-footer">
+        A product of <a href="https://patienceai.in" target="_blank" rel="noopener" class="footer-link">Patience AI</a>
+      </footer>
     </div>
   `,
   styles: [`
@@ -706,27 +732,26 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
     }
     .search-clear {
       position: absolute;
-      right: 8px;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
+      right: 48px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
       border: none;
-      background: var(--bg-hover);
       color: var(--text-muted);
       cursor: pointer;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.15s;
+      padding: 4px;
+      border-radius: 50%;
     }
-    .search-clear:hover {
-      background: var(--border);
-      color: var(--text-primary);
-    }
-    .search-clear mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
+    .search-clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .search-clear mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    
+    .search-submit-btn {
+      position: absolute !important;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--accent) !important;
     }
 
     /* Filter Toggle Button */
@@ -1221,6 +1246,24 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
     }
     .export-link:hover { text-decoration: underline; }
     .export-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .dash-footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+      margin-top: 40px;
+    }
+    .footer-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+    .footer-link:hover {
+      text-decoration: underline;
+    }
   `],
 })
 export class DashboardComponent implements OnInit, OnDestroy {
@@ -1232,7 +1275,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
   theme = inject(ThemeService);
 
-  displayedColumns = ['company_name', 'cin', 'company_status', 'state', 'date_of_incorporation', 'match_score', 'is_startup'];
+  displayedColumns = ['company_name', 'cin', 'company_status', 'company_category', 'state', 'date_of_incorporation', 'authorised_capital', 'paid_up_capital', 'match_score', 'is_startup'];
 
   companies = signal<Company[]>([]);
   total = signal(0);
@@ -1246,14 +1289,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   filter: CompanyFilter = {
     page: 1,
     pageSize: 25,
-    dateFrom: this._threeYearsAgo(),
-    dateTo: new Date().toISOString().split('T')[0],
+    dateFrom: undefined,
+    dateTo: undefined,
   };
 
   searchValue = '';
-  startupOnly = false;
+  startupFilter: 'all' | 'companies' | 'startups' = 'all';
   filtersOpen = false;
-  datePreset: '30d' | '90d' | '1y' | '3y' | 'all' | 'custom' = '3y';
+  datePreset: '30d' | '90d' | '1y' | '3y' | 'all' | 'custom' = 'all';
 
   private searchSubject = new Subject<string>();
   private pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -1262,12 +1305,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadData();
     this.loadStats();
     this.loadExportHistory();
+  }
 
-    this.searchSubject.pipe(debounceTime(400), distinctUntilChanged()).subscribe(v => {
-      this.filter.search = v || undefined;
-      this.filter.page = 1;
-      this.loadData();
-    });
+  executeSearch(): void {
+    this.filter.search = this.searchValue || undefined;
+    this.filter.page = 1;
+    this.loadData();
   }
 
   ngOnDestroy(): void {
@@ -1322,11 +1365,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadData();
   }
 
-  onStartupToggle(): void {
-    this.filter.isStartup = this.startupOnly ? true : undefined;
-    this.filter.page = 1;
-    this.loadData();
-  }
+
 
   onPage(e: PageEvent): void {
     this.filter.page = e.pageIndex + 1;
@@ -1334,23 +1373,26 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadData();
   }
 
+  clearSearch(): void {
+    this.searchValue = '';
+    this.executeSearch();
+  }
+
   resetFilters(): void {
     this.searchValue = '';
-    this.startupOnly = false;
-    this.datePreset = '3y';
+    this.startupFilter = 'all';
+    this.datePreset = 'all';
     this.filter = {
       page: 1,
       pageSize: 25,
-      dateFrom: this._threeYearsAgo(),
-      dateTo: new Date().toISOString().split('T')[0],
+      dateFrom: undefined,
+      dateTo: undefined,
+      isStartup: undefined,
     };
     this.loadData();
   }
 
-  clearSearch(): void {
-    this.searchValue = '';
-    this.searchSubject.next('');
-  }
+
 
   setDatePreset(preset: '30d' | '90d' | '1y' | '3y' | 'all'): void {
     this.datePreset = preset;
@@ -1372,9 +1414,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadData();
   }
 
-  setStartupFilter(only: boolean): void {
-    this.startupOnly = only;
-    this.filter.isStartup = only ? true : undefined;
+  setStartupFilter(val: 'all' | 'companies' | 'startups'): void {
+    this.startupFilter = val;
+    if (val === 'all') {
+      this.filter.isStartup = undefined;
+    } else if (val === 'companies') {
+      this.filter.isStartup = false;
+    } else if (val === 'startups') {
+      this.filter.isStartup = true;
+    }
     this.filter.page = 1;
     this.loadData();
   }
@@ -1383,8 +1431,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     let n = 0;
     if (this.searchValue) n++;
     if (this.filter.state) n++;
-    if (this.startupOnly) n++;
-    if (this.datePreset !== '3y') n++;
+    if (this.startupFilter !== 'all') n++;
+    if (this.datePreset !== 'all') n++;
     return n;
   }
 

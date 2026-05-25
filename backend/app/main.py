@@ -30,25 +30,25 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="StartupIntel India API",
+        title="Nexus Intel API",
         version="1.0.0",
-        description="Startup intelligence platform — Zauba Corp × data.gov.in",
+        description="B2B intelligence platform — Zauba Corp × data.gov.in",
         docs_url="/docs",
         redoc_url=None,
         lifespan=lifespan,
     )
 
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+        allow_methods=["*"],
+        allow_headers=["*"],
         max_age=600,
     )
+
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     app.include_router(auth.router)
     app.include_router(companies.router)

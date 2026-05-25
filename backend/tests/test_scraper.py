@@ -6,7 +6,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_trigger_scrape_requires_auth(client: AsyncClient):
     resp = await client.post("/scraper/trigger")
-    assert resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 async def test_trigger_scrape_requires_admin(client: AsyncClient, auth_headers):

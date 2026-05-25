@@ -49,6 +49,49 @@ async def daily_scrape_task():
         log.error("daily_scrape_failed", error=str(e))
 
 
+async def daily_datagov_seed_task():
+    """Triggered daily at 3 PM IST. Fetches 50 companies from DataGov."""
+    from app.database import AsyncSessionLocal
+    from app.models.company import MatchedCompany
+    from app.services.datagov_scraper import DataGovScraper
+    
+    log.info("datagov_seed_starting")
+    try:
+        scraper = DataGovScraper()
+        new_companies = []
+        async with AsyncSessionLocal() as db:
+            async for c_data in scraper.scrape_companies(limit_per_page=50):
+                cin = c_data.get("cin")
+                if cin:
+                    from sqlalchemy import select
+                    existing = (await db.execute(select(MatchedCompany).where(MatchedCompany.cin == cin))).scalar_one_or_none()
+                    if not existing:
+                        mc = MatchedCompany(
+                            company_name=c_data.get("company_name"),
+                            cin=cin,
+                            match_score=1.0,
+                            match_method="auto_seed",
+                            company_status=c_data.get("company_status"),
+                            roc_code=c_data.get("roc_code"),
+                            company_category=c_data.get("company_category"),
+                            date_of_incorporation=c_data.get("date_of_incorporation"),
+                            state=c_data.get("state"),
+                            authorised_capital=c_data.get("authorised_capital"),
+                            paid_up_capital=c_data.get("paid_up_capital"),
+                            is_startup=False,
+                            incorporation_year=c_data.get("date_of_incorporation").year if c_data.get("date_of_incorporation") else None,
+                        )
+                        db.add(mc)
+                        new_companies.append(mc)
+            
+            if new_companies:
+                await db.commit()
+                log.info("datagov_seed_completed", count=len(new_companies))
+            else:
+                log.info("datagov_seed_no_new_records")
+    except Exception as e:
+        log.error("datagov_seed_failed", error=str(e))
+
 def start_scheduler():
     global scheduler
     if scheduler and scheduler.running:
@@ -58,6 +101,12 @@ def start_scheduler():
     scheduler = AsyncIOScheduler(timezone=ist)
     scheduler.add_job(
         daily_scrape_task,
+        CronTrigger(hour=14, minute=0, timezone=ist),
+        id="daily_scrape",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        daily_datagov_seed_task,
         CronTrigger(hour=14, minute=0, timezone=ist),
         id="daily_scrape_2pm_ist",
         name="Daily Zauba+DataGov scrape at 2:00 PM IST",

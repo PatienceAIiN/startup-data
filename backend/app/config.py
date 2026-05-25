@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     R2_ACCOUNT_ID: str
     R2_ACCESS_KEY_ID: str
     R2_SECRET_ACCESS_KEY: str
-    R2_BUCKET_NAME: str = "startupintel-exports"
+    R2_BUCKET_NAME: str = "nexusintel-exports"
     R2_ENDPOINT_URL: str
 
     APP_ENV: str = "development"

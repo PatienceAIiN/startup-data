@@ -1,13 +1,21 @@
-# StartupIntel India
+# Nexus Intel
 
-Full-stack B2B intelligence platform that scrapes Indian company data from **Zauba Corp** and **data.gov.in**, fuzzy-matches across sources, stores in **NeonDB**, and exports CSV/XLSX to **Cloudflare R2**.
+A premium full-stack B2B intelligence platform designed to scrape, match, and explore Indian company listings from **Zauba Corp** and **data.gov.in**, storing processed records in **NeonDB** and exporting generated CSV/XLSX to **Cloudflare R2**.
 
-- **Backend**: FastAPI (Python 3.12) + SQLAlchemy 2.0 async + asyncpg
-- **Frontend**: Angular 18 (standalone components) + Angular Material + custom CSS-variable theming
-- **Database**: NeonDB (Postgres serverless)
-- **Storage**: Cloudflare R2 (S3-compatible)
-- **Scraping**: Playwright (Zauba) + httpx (data.gov.in API) + RapidFuzz matching
-- **Scheduling**: APScheduler — daily scrape at **2:00 PM IST**
+🚀 **A product of [Patience AI](https://patienceai.in)**
+
+---
+
+## Features
+
+- **Beautiful Glassmorphic UI**: High-fidelity dark mode with modern typography, subtle glow highlights, interactive micro-animations, and custom material form-fields with glowing bottom borders.
+- **Precision Data Separation**: Clean segmented filters on the main dashboard to view:
+  - **All**: Standard view showing the entire directory merged together.
+  - **Companies Only**: Traditional registered businesses and corporations.
+  - **Startups Only**: High-growth validated technology startups.
+- **Robust Scraper Engine**: Orchestrated Playwright (for Zauba Corp) + HTTPX (for data.gov.in) with APScheduler automations and custom RapidFuzz confidence scoring.
+- **Enterprise File Exports**: Parallel XLSX and CSV generators with R2 object store integration and automatic presigned-URL expiration links.
+- **Fully Containerized & Configured**: Fast multi-stage Docker build recipes and single-command orchestration via `docker-compose`.
 
 ---
 
@@ -17,47 +25,74 @@ Full-stack B2B intelligence platform that scrapes Indian company data from **Zau
 
 - Python 3.12+
 - Node.js 20+
-- A NeonDB project (free tier works)
-- Cloudflare R2 access (account ID + access key + secret)
-- An optional [data.gov.in API key](https://data.gov.in/help/how-use-apis-data-platform-india)
+- A NeonDB / PostgreSQL instance
+- Cloudflare R2 bucket credentials
+- A [data.gov.in API key](https://data.gov.in/help/how-use-apis-data-platform-india)
 
-### 1. Backend setup
+---
+
+### 1. Backend Setup
 
 ```bash
 cd backend
 python -m venv venv
-.\venv\Scripts\activate           # Windows
-# source venv/bin/activate        # macOS/Linux
+source venv/bin/activate       # macOS/Linux
+# .\venv\Scripts\activate      # Windows
+
 pip install -r requirements.txt
 playwright install chromium
 ```
 
-Copy `.env.example` to `.env` and fill in:
+Create a `.env` file in the `backend/` directory:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://USER:PASS@HOST/DB?sslmode=require
 DATABASE_URL_SYNC=postgresql://USER:PASS@HOST/DB?sslmode=require
-SECRET_KEY=<random 32+ char string>
+SECRET_KEY=<random-32-char-string>
 R2_ACCOUNT_ID=...
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
-R2_BUCKET_NAME=startupintel-exports
+R2_BUCKET_NAME=nexusintel-exports
 R2_ENDPOINT_URL=https://<account_id>.r2.cloudflarestorage.com
-DATAGOV_API_KEY=<optional>
+DATAGOV_API_KEY=<your-key>
 ```
 
-> **Important**: The asyncpg driver needs `?ssl=require`, but the URL accepts `?sslmode=require` because `app/database.py` strips/rewrites it. Likewise `&channel_binding=require` is removed automatically.
-
-Run migrations and start the server:
+Run database migrations:
 
 ```bash
 alembic upgrade head
+```
+
+Start the FastAPI application:
+
+```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Backend: http://localhost:8000 · Swagger docs: http://localhost:8000/docs
+- **API Base URL**: `http://localhost:8000`
+- **Swagger Documentation**: `http://localhost:8000/docs`
 
-### 2. Frontend setup
+---
+
+### 2. Seeding & Ingesting Data
+
+Nexus Intel supports simple and flexible tools to ingest production or development data.
+
+#### Synthetic Seed
+To easily seed 500 fake companies with highly realistic MCA patterns, names, and capital:
+```bash
+python seed_companies.py
+```
+
+#### Real-time Scrape
+To trigger a real scraping pipeline manually across the last 5 days:
+```bash
+python run_zauba_seed.py
+```
+
+---
+
+### 3. Frontend Setup
 
 ```bash
 cd frontend
@@ -65,191 +100,77 @@ npm ci --legacy-peer-deps
 npm start
 ```
 
-Frontend: http://localhost:4200
+- **App Web Interface**: `http://localhost:4200`
+- Custom environment configs are located in `frontend/src/environments/`.
 
-### 3. Create an admin user
+---
+
+### 4. Create Admin Account
 
 ```bash
 cd backend
 python scripts/create_admin.py
 ```
-
-Default: `admin@startupintel.in` / `Admin@110426`. Edit the script to change.
-
-### 4. Create the R2 bucket (one-time)
-
-```bash
-python scripts/create_r2_bucket.py
-```
-
-The R2 service also creates the bucket lazily on first upload (`_ensure_bucket`).
-
-### 5. Trigger a scrape
-
-- **Via UI**: log in as admin, click **Run Scrape Now**.
-- **Daily auto-scrape**: APScheduler fires at 2:00 PM IST every day.
-- **Promote Zauba records when no DataGov match**: `python scripts/promote_zauba_to_matched.py`
+Default credentials:
+- **Email**: `admin@nexusintel.in`
+- **Password**: `Admin@110426`
 
 ---
 
-## Architecture
+## Directory Architecture
 
 ```
-startupintel/
+nexus-intel/
 ├── backend/
-│   ├── alembic/                      # Migrations
+│   ├── alembic/                      # Database migrations
 │   ├── app/
-│   │   ├── main.py                   # FastAPI app + lifespan + scheduler hook
-│   │   ├── config.py                 # Pydantic settings (.env loader)
-│   │   ├── database.py               # Async engine (rewrites sslmode→ssl)
-│   │   ├── models/                   # SQLAlchemy ORM models
-│   │   ├── schemas/                  # Pydantic request/response
-│   │   ├── routers/                  # auth, companies, scraper, exports
+│   │   ├── main.py                   # FastAPI entrance + lifespan hooks
+│   │   ├── config.py                 # Pydantic configuration loader
+│   │   ├── database.py               # Async DB connection setup
+│   │   ├── models/                   # SQL ORM models
+│   │   ├── schemas/                  # Pydantic request/response schemas
+│   │   ├── routers/                  # Router endpoints (auth, companies, scraper, exports)
 │   │   └── services/
-│   │       ├── auth_service.py       # JWT + bcrypt 4.0.1
-│   │       ├── zauba_scraper.py      # Playwright → Zauba Corp listing
-│   │       ├── datagov_scraper.py    # httpx → data.gov.in resource API
-│   │       ├── matcher_service.py    # RapidFuzz + CIN-priority matching
-│   │       ├── r2_service.py         # boto3 + auto bucket-create
-│   │       ├── export_service.py     # CSV / XLSX (openpyxl) generation
-│   │       └── scheduler_service.py  # APScheduler — daily 2 PM IST
-│   ├── scripts/                      # Admin / ops scripts
-│   ├── tests/                        # 29 pytest cases (real NeonDB)
+│   │       ├── auth_service.py       # Security, hashing, and token logic
+│   │       ├── zauba_scraper.py      # Playwright Zauba scraper
+│   │       ├── datagov_scraper.py    # data.gov.in API consumer
+│   │       ├── matcher_service.py    # RapidFuzz match algorithm
+│   │       ├── r2_service.py         # Cloudflare R2 uploader & URL signer
+│   │       ├── export_service.py     # CSV / Excel formatting
+│   │       └── scheduler_service.py  # APScheduler daily orchestrator
+│   ├── scripts/                      # Admin and setup scripts
+│   ├── seed_companies.py             # Development database seed script
+│   ├── run_zauba_seed.py             # Scraper pipeline trigger script
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── styles.scss               # CSS variables for light/dark theme
-│   │   ├── index.html                # Material Icons CDN, Roboto font
+│   │   ├── index.html                # App entry with Material fonts
+│   │   ├── styles.scss               # Premium light/dark variables
 │   │   └── app/
-│   │       ├── app.config.ts         # Standalone bootstrap
-│   │       ├── app.routes.ts         # Lazy-loaded routes
-│   │       ├── core/
-│   │       │   ├── services/         # auth, theme, company, scraper, export
-│   │       │   ├── interceptors/     # JWT bearer interceptor
-│   │       │   ├── guards/           # authGuard
-│   │       │   └── dialogs/          # ConfirmDialog
+│   │       ├── app.routes.ts         # Lazy router mappings
 │   │       └── features/
-│   │           ├── auth/             # login + signup
-│   │           ├── dashboard/        # main dashboard with filters
-│   │           └── companies/
-│   │               ├── company-detail-dialog/  # modal popup
-│   │               ├── company-detail/         # standalone page (legacy)
-│   │               └── company-list/
-│   ├── postcss.config.js
-│   ├── tailwind.config.js
-│   ├── nginx.conf                    # Production reverse proxy
-│   └── Dockerfile                    # Multi-stage (build → nginx)
+│   │           ├── auth/             # Login & Signup modules
+│   │           └── dashboard/        # B2B search, filters, and downloads
+│   ├── Dockerfile
+│   └── package.json
 ├── docker-compose.yml
-└── render.yaml                       # Render.com deployment
+└── render.yaml                       # Platform-as-a-Service blueprint
 ```
 
 ---
 
-## Key Constraints & Gotchas
+## Automated Testing
 
-| Issue | Why | Fix |
-|---|---|---|
-| `bcrypt 5.x` breaks passlib | strict 72-byte password limit | Pin `bcrypt==4.0.1` in requirements |
-| `asyncpg` rejects `sslmode` | only accepts `ssl` keyword | `database.py` rewrites the URL |
-| Cross-loop asyncpg errors in tests | `BaseHTTPMiddleware` clashes with asyncpg | Tests use uvicorn-in-thread (`conftest.py`) |
-| 429 rate-limit in tests | `slowapi` defaults too aggressive | `os.environ` overrides set 1000/min in conftest |
-| Pydantic rejects `.test` emails | special-use TLD validation | Use `@gmail.com` / real domains in tests |
-| R2 bucket "NoSuchBucket" | Cloudflare R2 doesn't auto-create | `_ensure_bucket()` in `r2_service.py` + `create_r2_bucket.py` |
-| Companies hidden by date filter | NULL `date_of_incorporation` excluded by `>=` | Backend now uses `OR ... IS NULL` |
-
----
-
-## API Reference
-
-### Auth
-
-```
-POST   /auth/signup          { email, password, full_name }
-POST   /auth/login           { email, password }
-GET    /auth/me              [Bearer]
-```
-
-### Companies
-
-```
-GET    /companies            ?page&page_size&search&date_from&date_to
-                              &state&status&is_startup&min_score
-GET    /companies/{id}
-GET    /companies/stats
-```
-
-### Scraper (admin only)
-
-```
-POST   /scraper/trigger      ?date_from&date_to
-GET    /scraper/status/{id}
-GET    /scraper/jobs
-```
-
-### Exports
-
-```
-POST   /exports/csv          ?date_from&date_to&state&is_startup
-POST   /exports/xlsx
-GET    /exports/history
-```
-
----
-
-## Frontend Features
-
-- **Theme toggle** (sun/moon icon) — dark ↔ light, persisted in localStorage
-- **Search hero** with live debounced search + clear button
-- **Collapsible advanced filters**: date range with quick presets (30d / 90d / 1y / 3y / all-time), state dropdown, segmented startup-only toggle
-- **Filter badge** showing active filter count
-- **Company detail modal** — click any company name to open a smooth animated popup with quick stats, financial details, address, copy-to-clipboard, and per-row CSV/Excel export
-- **Logout confirmation dialog** to prevent accidental sign-outs
-- **Mobile-responsive**: navbar collapses, filters stack, table scrolls horizontally, dialog adjusts to viewport
-- **Hot reload** during development (`ng serve`)
-
----
-
-## Testing
-
+Run the FastAPI test suite containing 29 robust endpoint and unit assertions:
 ```bash
 cd backend
 pytest -v
 ```
 
-29 tests pass (auth, companies, exports, matcher, scraper) against real NeonDB. Frontend tests with `ng test`.
-
----
-
-## Deployment
-
-### Docker
-
-```bash
-docker compose up --build
-```
-
-### Render.com
-
-`render.yaml` defines two services (backend + frontend). Set the listed env vars as secrets, then push to your linked repo.
-
----
-
-## Scripts
-
-Located in `backend/scripts/`:
-
-| Script | Purpose |
-|---|---|
-| `create_admin.py` | Create / update admin user |
-| `make_admin.py` | Promote existing user to admin |
-| `create_r2_bucket.py` | Create the R2 bucket if missing |
-| `promote_zauba_to_matched.py` | Treat Zauba records as authoritative when DataGov has no overlap |
-| `inspect_companies.py` | Diagnose null incorporation dates / sample rows |
-| `test_playwright.py` | Verify Chromium installation |
-
 ---
 
 ## License
 
-Private — internal tool.
+Private repository - Proprietary software.
+Developed under **Patience AI**.

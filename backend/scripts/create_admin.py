@@ -41,4 +41,4 @@ async def main(email: str, password: str, full_name: str):
 
 
 if __name__ == "__main__":
-    asyncio.run(main("admin@startupintel.in", "Admin@110426", "Administrator"))
+    asyncio.run(main("admin@nexusintel.in", "Admin@110426", "Administrator"))

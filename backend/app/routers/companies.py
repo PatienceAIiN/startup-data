@@ -33,9 +33,14 @@ async def list_companies(
     count_query = select(func.count()).select_from(MatchedCompany)
 
     filters = []
-    if search:
-        filters.append(MatchedCompany.company_name.ilike(f"%{search}%"))
     from sqlalchemy import or_
+    if search:
+        filters.append(or_(
+            MatchedCompany.company_name.ilike(f"%{search}%"),
+            MatchedCompany.cin.ilike(f"%{search}%"),
+            MatchedCompany.company_category.ilike(f"%{search}%"),
+            MatchedCompany.state.ilike(f"%{search}%"),
+        ))
     if date_from:
         filters.append(or_(
             MatchedCompany.date_of_incorporation >= date_from,
@@ -62,6 +67,41 @@ async def list_companies(
         count_query = count_query.where(f)
 
     total = (await db.execute(count_query)).scalar() or 0
+
+    if search and total == 0:
+        from app.services.datagov_scraper import DataGovScraper
+        import structlog
+        scraper = DataGovScraper()
+        try:
+            new_companies = []
+            async for c_data in scraper.scrape_companies(search_query=search, limit_per_page=50):
+                cin = c_data.get("cin")
+                if cin:
+                    existing = (await db.execute(select(MatchedCompany).where(MatchedCompany.cin == cin))).scalar_one_or_none()
+                    if not existing:
+                        mc = MatchedCompany(
+                            company_name=c_data.get("company_name"),
+                            cin=cin,
+                            match_score=1.0,
+                            match_method="live_search",
+                            company_status=c_data.get("company_status"),
+                            roc_code=c_data.get("roc_code"),
+                            company_category=c_data.get("company_category"),
+                            date_of_incorporation=c_data.get("date_of_incorporation"),
+                            state=c_data.get("state"),
+                            authorised_capital=c_data.get("authorised_capital"),
+                            paid_up_capital=c_data.get("paid_up_capital"),
+                            is_startup=False,
+                            incorporation_year=c_data.get("date_of_incorporation").year if c_data.get("date_of_incorporation") else None,
+                        )
+                        db.add(mc)
+                        new_companies.append(mc)
+            if new_companies:
+                await db.commit()
+                total = (await db.execute(count_query)).scalar() or 0
+        except Exception as e:
+            structlog.get_logger().error("live_search_failed", error=str(e))
+
     query = query.order_by(MatchedCompany.date_of_incorporation.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
     items = (await db.execute(query)).scalars().all()

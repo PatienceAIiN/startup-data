@@ -33,7 +33,7 @@ function passwordValidator(control: AbstractControl) {
         <!-- Header -->
         <div class="auth-header">
           <div class="auth-logo">🚀</div>
-          <h1 class="auth-title">StartupIntel</h1>
+          <h1 class="auth-title">Nexus Intel</h1>
           <p class="auth-subtitle">Create your account</p>
         </div>
 
@@ -99,76 +99,145 @@ function passwordValidator(control: AbstractControl) {
           <span>Already have an account?</span>
           <a routerLink="/login" class="auth-link">Sign in</a>
         </div>
+
+        <div class="product-credit">
+          A product of <a href="https://patienceai.in" target="_blank" rel="noopener" class="credit-link">Patience AI</a>
+        </div>
       </div>
     </div>
   `,
   styles: [`
     .auth-page {
       min-height: 100vh;
-      background: #0f172a;
+      background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%);
+      background-size: 200% 200%;
+      animation: gradientBG 15s ease infinite;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .auth-page::before, .auth-page::after {
+      content: '';
+      position: absolute;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      filter: blur(80px);
+      z-index: 0;
+      animation: float 10s ease-in-out infinite;
+    }
+    .auth-page::before {
+      background: rgba(16, 185, 129, 0.2);
+      top: -100px;
+      left: -100px;
+    }
+    .auth-page::after {
+      background: rgba(99, 102, 241, 0.15);
+      bottom: -100px;
+      right: -100px;
+      animation-delay: -5s;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-30px) scale(1.05); }
     }
     .auth-card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 16px;
-      padding: 40px;
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 48px 40px;
       width: 100%;
-      max-width: 420px;
-      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+      max-width: 440px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+      position: relative;
+      z-index: 1;
+      transform: translateY(0);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .auth-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 30px 60px -12px rgba(0,0,0,0.8);
     }
     .auth-header {
       text-align: center;
       margin-bottom: 32px;
     }
     .auth-logo {
-      font-size: 48px;
-      margin-bottom: 12px;
+      font-size: 56px;
+      margin-bottom: 16px;
       line-height: 1;
+      filter: drop-shadow(0 0 15px rgba(52, 211, 153, 0.4));
+      animation: pulse 3s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
     }
     .auth-title {
-      font-size: 28px;
-      font-weight: 700;
-      color: #34d399;
-      margin: 0 0 6px;
+      font-size: 32px;
+      font-weight: 800;
+      background: linear-gradient(to right, #34d399, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin: 0 0 8px;
     }
     .auth-subtitle {
-      color: #64748b;
+      color: #94a3b8;
       margin: 0;
-      font-size: 14px;
+      font-size: 15px;
     }
     .auth-form {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 12px;
     }
     .auth-field {
       width: 100%;
     }
     .auth-field .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
-      background: rgba(15, 23, 42, 0.5) !important;
+      background: rgba(15, 23, 42, 0.4) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+      border-radius: 8px !important;
+      transition: all 0.3s ease;
+    }
+    .auth-field:hover .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+      background: rgba(15, 23, 42, 0.6) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+    }
+    .auth-field.mat-focused .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+      background: rgba(15, 23, 42, 0.7) !important;
+      border-bottom: 2px solid #34d399 !important;
+      box-shadow: 0 4px 20px rgba(52, 211, 153, 0.15);
+    }
+    .auth-field .mat-mdc-form-field-subscript-wrapper {
+      display: none;
+    }
+    .auth-field .mdc-line-ripple,
+    .auth-field .mdc-line-ripple::before,
+    .auth-field .mdc-line-ripple::after {
+      display: none !important;
+    }
+    .auth-field .mat-mdc-form-field-underline,
+    .auth-field .mat-mdc-form-field-ripple {
+      display: none !important;
     }
     .auth-field .mdc-notched-outline__leading,
     .auth-field .mdc-notched-outline__notch,
     .auth-field .mdc-notched-outline__trailing {
-      border-color: #475569 !important;
-    }
-    .auth-field:hover .mdc-notched-outline__leading,
-    .auth-field:hover .mdc-notched-outline__notch,
-    .auth-field:hover .mdc-notched-outline__trailing {
-      border-color: #94a3b8 !important;
-    }
-    .auth-field.mat-focused .mdc-notched-outline__leading,
-    .auth-field.mat-focused .mdc-notched-outline__notch,
-    .auth-field.mat-focused .mdc-notched-outline__trailing {
-      border-color: #34d399 !important;
-      border-width: 2px !important;
+      border: none !important;
     }
     .auth-field .mdc-floating-label {
-      color: #64748b !important;
+      color: #94a3b8 !important;
     }
     .auth-field.mat-focused .mdc-floating-label {
       color: #34d399 !important;
@@ -178,7 +247,7 @@ function passwordValidator(control: AbstractControl) {
     }
     .auth-field .mat-mdc-form-field-icon-prefix mat-icon,
     .auth-field .mat-mdc-form-field-icon-suffix mat-icon {
-      color: #64748b;
+      color: #94a3b8;
     }
     .auth-field.mat-focused .mat-mdc-form-field-icon-prefix mat-icon {
       color: #34d399;
@@ -239,10 +308,27 @@ function passwordValidator(control: AbstractControl) {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
     }
     .auth-link { color: #34d399; text-decoration: none; font-weight: 600; }
     .auth-link:hover { text-decoration: underline; }
+    .product-credit {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.4);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 16px;
+    }
+    .credit-link {
+      color: #34d399;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+    .credit-link:hover {
+      color: #60a5fa;
+      text-decoration: underline;
+    }
   `],
 })
 export class SignupComponent {

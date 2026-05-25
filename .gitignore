@@ -52,3 +52,13 @@ admin_token.txt
 job_id.txt
 backend/backend.log
 frontend/ng-serve.log
+
+# Data & CSV files (especially large files >100MB)
+*.csv
+*.xlsx
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+__pycache__/
+*.pyc

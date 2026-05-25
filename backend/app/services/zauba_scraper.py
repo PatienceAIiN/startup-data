@@ -3,6 +3,9 @@ from datetime import datetime, date
 from typing import AsyncGenerator, Optional
 import structlog
 from playwright.async_api import async_playwright
+import httpx
+from bs4 import BeautifulSoup
+import re
 from app.config import settings
 
 log = structlog.get_logger()
@@ -99,7 +102,53 @@ class ZaubaScraper:
         if not company_name:
             return None
 
-        return {
+        href = await name_el.get_attribute("href") if name_el else None
+        detail_data = {}
+        if href:
+            try:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                }
+                async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=10.0) as client:
+                    resp = await client.get(href)
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, 'html.parser')
+                        
+                        for td in soup.find_all('td'):
+                            txt = td.text.lower()
+                            if 'authorised share capital' in txt or 'obligation of contribution' in txt or 'authorised capital' in txt:
+                                val_td = td.find_next_sibling('td')
+                                if val_td:
+                                    nums = re.findall(r'\d+', val_td.text)
+                                    if nums:
+                                        detail_data["authorised_capital"] = int("".join(nums))
+                            elif 'paid-up share capital' in txt or 'paid up capital' in txt:
+                                val_td = td.find_next_sibling('td')
+                                if val_td:
+                                    nums = re.findall(r'\d+', val_td.text)
+                                    if nums:
+                                        detail_data["paid_up_capital"] = int("".join(nums))
+                                        
+                        for tr in soup.find_all('tr'):
+                            ths = tr.find_all(['th', 'td'])
+                            if len(ths) >= 2:
+                                key = ths[0].text.strip().lower()
+                                val = ths[-1].text.strip()
+                                if val and val != '-':
+                                    if 'company category' in key:
+                                        detail_data["company_category"] = val
+                                    elif 'company subcategory' in key:
+                                        detail_data["company_subcategory"] = val
+                                    elif 'class of company' in key:
+                                        detail_data["class_of_company"] = val
+                                    elif 'state' == key:
+                                        detail_data["state"] = val
+                                    elif 'address' in key:
+                                        detail_data["registered_address"] = val
+            except Exception as e:
+                log.warning("zauba_scraper.detail_error", error=str(e), url=href)
+
+        result = {
             "cin": cin_text.strip() or None,
             "company_name": company_name,
             "company_status": status_text.strip() or None,
@@ -107,3 +156,5 @@ class ZaubaScraper:
             "date_of_incorporation": inc_date,
             "scraped_at": datetime.utcnow(),
         }
+        result.update(detail_data)
+        return result

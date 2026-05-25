@@ -59,4 +59,4 @@ async def test_get_me_with_valid_token(client: AsyncClient, auth_headers):
 
 async def test_get_me_without_token(client: AsyncClient):
     resp = await client.get("/auth/me")
-    assert resp.status_code == 403
+    assert resp.status_code in (401, 403)

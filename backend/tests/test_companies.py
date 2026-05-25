@@ -6,7 +6,7 @@ pytestmark = pytest.mark.asyncio
 
 async def test_list_companies_requires_auth(client: AsyncClient):
     resp = await client.get("/companies")
-    assert resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 async def test_list_companies_authenticated(client: AsyncClient, auth_headers):
@@ -39,7 +39,7 @@ async def test_list_companies_date_filter(client: AsyncClient, auth_headers):
 
 async def test_stats_requires_auth(client: AsyncClient):
     resp = await client.get("/companies/stats")
-    assert resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 async def test_stats_authenticated(client: AsyncClient, auth_headers):

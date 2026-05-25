@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: startupintel-backend
+    name: nexusintel-backend
     env: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
@@ -26,15 +26,15 @@ services:
       - key: R2_SECRET_ACCESS_KEY
         sync: false
       - key: R2_BUCKET_NAME
-        value: startupintel-exports
+        value: nexusintel-exports
       - key: R2_ENDPOINT_URL
         sync: false
       - key: APP_ENV
         value: production
       - key: FRONTEND_URL
-        value: https://startupintel-frontend.onrender.com
+        value: https://nexusintel-frontend.onrender.com
       - key: CORS_ORIGINS
-        value: '["https://startupintel-frontend.onrender.com"]'
+        value: '["https://nexusintel-frontend.onrender.com"]'
       - key: DATAGOV_API_KEY
         sync: false
       - key: SCRAPE_MAX_PAGES
@@ -43,7 +43,7 @@ services:
         value: 0.75
 
   - type: web
-    name: startupintel-frontend
+    name: nexusintel-frontend
     env: docker
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
