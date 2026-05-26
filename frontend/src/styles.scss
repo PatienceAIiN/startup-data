@@ -372,3 +372,163 @@ body.theme-light input[type="date"]::-webkit-calendar-picker-indicator {
   direction: ltr;
   -webkit-font-smoothing: antialiased;
 }
+
+/* ========================================================
+   CENTER BUTTON LOADERS
+   ======================================================== */
+.auth-submit-btn .mdc-button__label,
+.btn-primary .mdc-button__label {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+.btn-spinner {
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* ========================================================
+   TESLA-STYLE LOAD & VISIBILITY ANIMATIONS
+   ======================================================== */
+@keyframes teslaFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.auth-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease, border-color 0.3s ease !important;
+}
+
+.auth-logo {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.05s;
+  opacity: 0;
+}
+.auth-title {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.15s;
+  opacity: 0;
+}
+.auth-subtitle {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.25s;
+  opacity: 0;
+}
+.auth-form {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.35s;
+  opacity: 0;
+}
+.auth-footer, .product-credit {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.45s;
+  opacity: 0;
+}
+
+/* Dashboard staggered animations */
+.page-header {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.05s;
+  opacity: 0;
+}
+.stats-grid {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.15s;
+  opacity: 0;
+}
+.filters-panel {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.25s;
+  opacity: 0;
+}
+.table-section {
+  animation: teslaFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.35s;
+  opacity: 0;
+}
+
+/* ========================================================
+   LIGHT MODE AUTH PAGES SUPPORT
+   ======================================================== */
+body.theme-light .auth-page {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%) !important;
+  transition: background 0.3s ease;
+}
+body.theme-light .auth-card {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.08) !important;
+}
+body.theme-light .auth-title {
+  background: linear-gradient(to right, #059669, #2563eb) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+body.theme-light .auth-subtitle {
+  color: #475569 !important;
+}
+body.theme-light .auth-field .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+  background: rgba(241, 245, 249, 0.6) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1) !important;
+}
+body.theme-light .auth-field:hover .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+  background: rgba(241, 245, 249, 0.9) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.2) !important;
+}
+body.theme-light .auth-field.mat-focused .mdc-text-field--outlined:not(.mdc-text-field--disabled) {
+  background: #ffffff !important;
+  border-bottom: 2px solid #059669 !important;
+  box-shadow: 0 4px 20px rgba(5, 150, 105, 0.08) !important;
+}
+body.theme-light .auth-field .mdc-floating-label {
+  color: #475569 !important;
+}
+body.theme-light .auth-field.mat-focused .mdc-floating-label {
+  color: #059669 !important;
+}
+body.theme-light .auth-field input.mat-mdc-input-element {
+  color: #0f172a !important;
+}
+body.theme-light .auth-field .mat-mdc-form-field-icon-prefix mat-icon {
+  color: #475569 !important;
+}
+body.theme-light .auth-field.mat-focused .mat-mdc-form-field-icon-prefix mat-icon {
+  color: #059669 !important;
+}
+body.theme-light .auth-submit-btn {
+  background: #059669 !important;
+}
+body.theme-light .auth-submit-btn:disabled {
+  background: #cbd5e1 !important;
+  color: #94a3b8 !important;
+}
+body.theme-light .auth-footer {
+  color: #475569 !important;
+}
+body.theme-light .auth-link {
+  color: #059669 !important;
+}
+body.theme-light .product-credit {
+  color: rgba(15, 23, 42, 0.4) !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+body.theme-light .credit-link {
+  color: #059669 !important;
+}
+body.theme-light .credit-link:hover {
+  color: #2563eb !important;
+}
+
