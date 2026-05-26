@@ -60,7 +60,11 @@ def create_app() -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     async def root(request: Request):
-        frontend_host = urlparse(settings.FRONTEND_URL).netloc.lower()
+        frontend_url = settings.FRONTEND_URL or ""
+        if frontend_url and not frontend_url.startswith(("http://", "https://")):
+            frontend_url = f"https://{frontend_url}"
+
+        frontend_host = urlparse(frontend_url).netloc.lower()
         request_host = (request.url.hostname or "").lower()
 
         if not frontend_host or request_host == frontend_host:
@@ -70,7 +74,7 @@ def create_app() -> FastAPI:
                 "health": "/health",
             }
 
-        return RedirectResponse(url=settings.FRONTEND_URL, status_code=307)
+        return RedirectResponse(url=frontend_url, status_code=307)
 
     @app.get("/health")
     async def health():
