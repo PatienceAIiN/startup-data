@@ -51,6 +51,38 @@ def create_app() -> FastAPI:
         max_age=600,
     )
 
+    # Financial-Grade Security Middleware (DOS, XSS, Clickjacking, MIME and HSTS)
+    @app.middleware("http")
+    async def security_attack_prevention_middleware(request: Request, call_next):
+        # 1. DOS Protection: Prevent memory exhaustion attacks by capping standard request entity bodies at 5MB
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > 5 * 1024 * 1024:  # 5 Megabytes
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "Financial platform entity limit exceeded: request body payload too large."}
+                    )
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "Malformed request: invalid Content-Length format."}
+                )
+
+        response = await call_next(request)
+
+        # 2. Cyber-Security Headers
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Enforce strict HSTS in production for secure encrypted transport
+        if settings.APP_ENV == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+            
+        return response
+
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
