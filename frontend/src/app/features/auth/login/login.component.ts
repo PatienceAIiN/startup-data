@@ -28,7 +28,7 @@ import { AuthService } from '../../../core/services/auth.service';
             <mat-icon>hub</mat-icon>
           </div>
           <h1 class="auth-title">Nexus Intel</h1>
-          <p class="auth-subtitle">India's B2B Intelligence Platform</p>
+          <p class="auth-subtitle">Sign in to your account</p>
         </div>
 
         <!-- Form -->
