@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Solid deep dark slate premium background -->
+  <rect width="512" height="512" fill="#020617"/>
+  
+  <!-- Beautiful emerald green glowing hub graph structure -->
+  <g transform="translate(56, 56) scale(0.78)">
+    <!-- Connections (Lines) -->
+    <line x1="256" y1="256" x2="100" y2="150" stroke="#34d399" stroke-width="20" stroke-linecap="round"/>
+    <line x1="256" y1="256" x2="412" y2="150" stroke="#34d399" stroke-width="20" stroke-linecap="round"/>
+    <line x1="256" y1="256" x2="256" y2="410" stroke="#34d399" stroke-width="20" stroke-linecap="round"/>
+    
+    <!-- Central Node -->
+    <circle cx="256" cy="256" r="65" fill="#10b981"/>
+    <circle cx="256" cy="256" r="45" fill="#34d399"/>
+    
+    <!-- Peripheral Node 1 -->
+    <circle cx="100" cy="150" r="45" fill="#059669"/>
+    <circle cx="100" cy="150" r="30" fill="#34d399"/>
+    
+    <!-- Peripheral Node 2 -->
+    <circle cx="412" cy="150" r="45" fill="#059669"/>
+    <circle cx="412" cy="150" r="30" fill="#34d399"/>
+    
+    <!-- Peripheral Node 3 -->
+    <circle cx="256" cy="410" r="45" fill="#059669"/>
+    <circle cx="256" cy="410" r="30" fill="#34d399"/>
+  </g>
+</svg>
