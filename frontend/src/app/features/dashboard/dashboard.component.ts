@@ -453,7 +453,7 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
 
       <!-- Dashboard Footer -->
       <footer class="dash-footer">
-        A product of <a href="https://patienceai.in" target="_blank" rel="noopener" class="footer-link">Patience AI</a>
+        © 2026 Copyright Reserved | A product of <a href="https://patienceai.in" target="_blank" rel="noopener" class="footer-link">Patience AI</a>
       </footer>
     </div>
   `,

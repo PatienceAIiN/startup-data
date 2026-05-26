@@ -74,7 +74,7 @@ import { AuthService } from '../../../core/services/auth.service';
         </div>
 
         <div class="product-credit">
-          A product of <a href="https://patienceai.in" target="_blank" rel="noopener" class="credit-link">Patience AI</a>
+          © 2026 Copyright Reserved | A product of <a href="https://patienceai.in" target="_blank" rel="noopener" class="credit-link">Patience AI</a>
         </div>
       </div>
     </div>
