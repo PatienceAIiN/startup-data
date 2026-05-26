@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: nexusintel-backend
+    name: nexusintel-app
     env: docker
-    dockerfilePath: backend/Dockerfile
-    dockerContext: backend
+    dockerfilePath: Dockerfile
+    dockerContext: .
     plan: standard
     healthCheckPath: /health
     envVars:
@@ -26,25 +26,20 @@ services:
       - key: R2_SECRET_ACCESS_KEY
         sync: false
       - key: R2_BUCKET_NAME
-        value: nexusintel-exports
+        value: startupintel-exports
       - key: R2_ENDPOINT_URL
         sync: false
       - key: APP_ENV
         value: production
       - key: FRONTEND_URL
-        value: https://nexusintel-frontend.onrender.com
+        value: https://nexus-company-data.onrender.com
+      - key: BACKEND_URL
+        value: https://nexus-company-data.onrender.com
       - key: CORS_ORIGINS
-        value: '["https://nexusintel-frontend.onrender.com"]'
+        value: '["https://nexus-company-data.onrender.com"]'
       - key: DATAGOV_API_KEY
         sync: false
       - key: SCRAPE_MAX_PAGES
         value: 50
       - key: MATCH_CONFIDENCE_THRESHOLD
         value: 0.75
-
-  - type: web
-    name: nexusintel-frontend
-    env: docker
-    dockerfilePath: frontend/Dockerfile
-    dockerContext: frontend
-    plan: free
