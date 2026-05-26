@@ -1368,9 +1368,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   onStateChange(): void {
     const st = this.filter.state ? this.filter.state.trim().toUpperCase() : '';
-    if (st && st !== 'MAHARASHTRA') {
-      const selectedState = this.filter.state;
-      this.filter.state = 'MAHARASHTRA'; // Default back to Maharashtra
+    if (st !== 'MAHARASHTRA') {
+      const selectedState = this.filter.state || 'All States';
+      
+      // Force mat-select model update in next tick to reset dropdown selection visually
+      setTimeout(() => {
+        this.filter.state = 'MAHARASHTRA';
+      });
+
       this.dialog.open(ConfirmDialogComponent, {
         width: '400px',
         data: {
