@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -54,6 +55,11 @@ def create_app() -> FastAPI:
     app.include_router(companies.router)
     app.include_router(scraper.router)
     app.include_router(exports.router)
+
+
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return RedirectResponse(url=settings.FRONTEND_URL, status_code=307)
 
     @app.get("/health")
     async def health():
