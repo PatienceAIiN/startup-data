@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -58,27 +60,52 @@ def create_app() -> FastAPI:
     app.include_router(exports.router)
 
 
-    @app.get("/", include_in_schema=False)
-    async def root(request: Request):
-        frontend_url = settings.FRONTEND_URL or ""
-        if frontend_url and not frontend_url.startswith(("http://", "https://")):
-            frontend_url = f"https://{frontend_url}"
+    if not os.path.exists("static"):
+        @app.get("/", include_in_schema=False)
+        async def root(request: Request):
+            frontend_url = settings.FRONTEND_URL or ""
+            if frontend_url and not frontend_url.startswith(("http://", "https://")):
+                frontend_url = f"https://{frontend_url}"
 
-        frontend_host = urlparse(frontend_url).netloc.lower()
-        request_host = (request.url.hostname or "").lower()
+            frontend_host = urlparse(frontend_url).netloc.lower()
+            request_host = (request.url.hostname or "").lower()
 
-        if not frontend_host or request_host == frontend_host:
-            return {
-                "message": "Backend is running",
-                "docs": "/docs",
-                "health": "/health",
-            }
+            if not frontend_host or request_host == frontend_host:
+                return {
+                    "message": "Backend is running",
+                    "docs": "/docs",
+                    "health": "/health",
+                }
 
-        return RedirectResponse(url=frontend_url, status_code=307)
+            return RedirectResponse(url=frontend_url, status_code=307)
 
     @app.get("/health")
     async def health():
         return {"status": "ok", "env": settings.APP_ENV}
+
+    # Mount frontend static files if the directory exists to support unified hosting
+    if os.path.exists("static"):
+        app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+        # Custom exception handler for 404 Errors to support SPA routing (Angular routing)
+        @app.exception_handler(404)
+        async def spa_404_handler(request: Request, exc: Exception):
+            path = request.url.path
+            
+            # Keep API endpoints returning standard 404
+            if path.startswith(("/auth", "/companies", "/scraper", "/exports", "/docs", "/health")):
+                return JSONResponse(status_code=404, content={"detail": "Not Found"})
+            
+            # If it's a file request that doesn't exist (e.g. missing image/assets), return 404
+            if "." in path.split("/")[-1]:
+                return JSONResponse(status_code=404, content={"detail": "Not Found"})
+            
+            # Serve index.html for SPA routing
+            index_path = os.path.join("static", "index.html")
+            if os.path.exists(index_path):
+                return FileResponse(index_path)
+            
+            return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
     return app
 
