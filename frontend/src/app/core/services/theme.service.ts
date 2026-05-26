@@ -22,6 +22,6 @@ export class ThemeService {
 
   private _loadInitial(): ThemeMode {
     const saved = localStorage.getItem(this.STORAGE_KEY) as ThemeMode | null;
-    return saved === 'light' ? 'light' : 'dark';
+    return saved === 'dark' ? 'dark' : 'light';
   }
 }

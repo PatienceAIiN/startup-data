@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../../core/services/auth.service';
+import { ThemeService } from '../../core/services/theme.service';
 
 @Component({
   selector: 'app-landing',
@@ -22,14 +23,17 @@ import { AuthService } from '../../core/services/auth.service';
           <mat-icon class="logo-icon-pulse">hub</mat-icon>
           <span class="logo-text">Nexus Company Intel</span>
         </div>
-        @if (auth.isAuthenticated()) {
-          <div class="landing-nav-actions">
+        <div class="landing-nav-actions">
+          <button mat-icon-button (click)="themeService.toggle()" class="theme-toggle-btn" aria-label="Toggle Theme">
+            <mat-icon>{{ themeService.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
+          </button>
+          @if (auth.isAuthenticated()) {
             <a mat-flat-button routerLink="/dashboard" class="nav-enter-btn">
               <span>Go to Dashboard</span>
               <mat-icon>arrow_forward</mat-icon>
             </a>
-          </div>
-        }
+          }
+        </div>
       </header>
 
       <!-- Main Hero Content -->
@@ -93,8 +97,9 @@ import { AuthService } from '../../core/services/auth.service';
       border-radius: 50%;
       filter: blur(100px);
       z-index: 0;
-      opacity: 0.15;
+      opacity: 0.22;
       pointer-events: none;
+      transition: opacity 0.5s ease;
     }
     .glow-1 {
       background: #10b981;
@@ -102,7 +107,7 @@ import { AuthService } from '../../core/services/auth.service';
       height: 500px;
       top: -150px;
       left: -100px;
-      animation: teslaBg 18s ease-in-out infinite alternate;
+      animation: teslaBg 8s ease-in-out infinite alternate;
     }
     .glow-2 {
       background: #3b82f6;
@@ -110,21 +115,21 @@ import { AuthService } from '../../core/services/auth.service';
       height: 600px;
       bottom: -200px;
       right: -100px;
-      animation: teslaBg 22s ease-in-out infinite alternate-reverse;
+      animation: teslaBg 10s ease-in-out infinite alternate-reverse;
     }
 
     @keyframes teslaBg {
       0% {
         transform: translate(0, 0) scale(1);
-        opacity: 0.12;
-      }
-      50% {
-        transform: translate(60px, -40px) scale(1.1);
         opacity: 0.18;
       }
+      50% {
+        transform: translate(120px, -80px) scale(1.25);
+        opacity: 0.28;
+      }
       100% {
-        transform: translate(-40px, 80px) scale(0.95);
-        opacity: 0.12;
+        transform: translate(-80px, 120px) scale(0.9);
+        opacity: 0.18;
       }
     }
 
@@ -428,6 +433,35 @@ import { AuthService } from '../../core/services/auth.service';
       color: #2563eb !important;
     }
 
+    /* Theme Toggle Button Styles */
+    .theme-toggle-btn {
+      color: rgba(255, 255, 255, 0.6) !important;
+      margin-right: 12px;
+      transition: all 0.3s ease !important;
+    }
+    .theme-toggle-btn:hover {
+      color: #ffffff !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      transform: rotate(15deg);
+    }
+    body.theme-light .theme-toggle-btn {
+      color: rgba(15, 23, 42, 0.6) !important;
+    }
+    body.theme-light .theme-toggle-btn:hover {
+      color: #0f172a !important;
+      background: rgba(15, 23, 42, 0.06) !important;
+    }
+
+    /* Boost glow opacity in light mode for dynamic animation visibility */
+    body.theme-light .glow-1 {
+      opacity: 0.35;
+      background: #34d399;
+    }
+    body.theme-light .glow-2 {
+      opacity: 0.35;
+      background: #60a5fa;
+    }
+
     /* Footer */
     .landing-footer {
       text-align: center;
@@ -452,4 +486,5 @@ import { AuthService } from '../../core/services/auth.service';
 })
 export class LandingComponent {
   auth = inject(AuthService);
+  themeService = inject(ThemeService);
 }
