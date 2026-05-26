@@ -32,7 +32,9 @@ function passwordValidator(control: AbstractControl) {
       <div class="auth-card">
         <!-- Header -->
         <div class="auth-header">
-          <div class="auth-logo">🚀</div>
+          <div class="auth-logo">
+            <mat-icon>hub</mat-icon>
+          </div>
           <h1 class="auth-title">Nexus Intel</h1>
           <p class="auth-subtitle">Create your account</p>
         </div>
@@ -173,11 +175,22 @@ function passwordValidator(control: AbstractControl) {
       margin-bottom: 32px;
     }
     .auth-logo {
-      font-size: 56px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       margin-bottom: 16px;
-      line-height: 1;
+    }
+    .auth-logo mat-icon {
+      font-size: 56px !important;
+      width: 56px !important;
+      height: 56px !important;
+      color: #34d399;
       filter: drop-shadow(0 0 15px rgba(52, 211, 153, 0.4));
       animation: pulse 3s infinite;
+    }
+    body.theme-light .auth-logo mat-icon {
+      color: #059669;
+      filter: drop-shadow(0 0 15px rgba(5, 150, 105, 0.2));
     }
     @keyframes pulse {
       0%, 100% { transform: scale(1); }

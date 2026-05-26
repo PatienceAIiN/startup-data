@@ -46,7 +46,7 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
       <!-- Top Navigation Bar -->
       <header class="dash-navbar">
         <div class="dash-logo">
-          <span class="logo-icon">🚀</span>
+          <mat-icon class="logo-icon">hub</mat-icon>
           <div class="logo-stack">
             <span class="logo-title">Nexus Intel</span>
           </div>
@@ -490,8 +490,13 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
       gap: 12px;
     }
     .logo-icon {
-      font-size: 28px;
+      font-size: 28px !important;
+      width: 28px !important;
+      height: 28px !important;
       line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
     .logo-stack {
       display: flex;
