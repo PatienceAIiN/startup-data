@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -8,6 +9,7 @@ from app.config import settings
 from app.routers import auth, companies, scraper, exports
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 import structlog
+from urllib.parse import urlparse
 
 log = structlog.get_logger()
 limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT_DEFAULT])
@@ -54,6 +56,21 @@ def create_app() -> FastAPI:
     app.include_router(companies.router)
     app.include_router(scraper.router)
     app.include_router(exports.router)
+
+
+    @app.get("/", include_in_schema=False)
+    async def root(request: Request):
+        frontend_host = urlparse(settings.FRONTEND_URL).netloc.lower()
+        request_host = (request.url.hostname or "").lower()
+
+        if not frontend_host or request_host == frontend_host:
+            return {
+                "message": "Backend is running",
+                "docs": "/docs",
+                "health": "/health",
+            }
+
+        return RedirectResponse(url=settings.FRONTEND_URL, status_code=307)
 
     @app.get("/health")
     async def health():
