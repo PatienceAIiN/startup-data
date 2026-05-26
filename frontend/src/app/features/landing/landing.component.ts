@@ -21,18 +21,14 @@ import { AuthService } from '../../core/services/auth.service';
         <div class="landing-logo">
           <mat-icon class="logo-icon-pulse">hub</mat-icon>
           <span class="logo-text">Nexus Company</span>
-        </div>
-        <div class="landing-nav-actions">
-          @if (auth.isAuthenticated()) {
+        @if (auth.isAuthenticated()) {
+          <div class="landing-nav-actions">
             <a mat-flat-button routerLink="/dashboard" class="nav-enter-btn">
               <span>Go to Dashboard</span>
               <mat-icon>arrow_forward</mat-icon>
             </a>
-          } @else {
-            <a mat-button routerLink="/login" class="nav-login-btn">Sign In</a>
-            <a mat-flat-button routerLink="/signup" class="nav-signup-btn">Create Account</a>
-          }
-        </div>
+          </div>
+        }
       </header>
 
       <!-- Main Hero Content -->
