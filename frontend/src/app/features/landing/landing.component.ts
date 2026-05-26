@@ -20,7 +20,7 @@ import { AuthService } from '../../core/services/auth.service';
       <header class="landing-header">
         <div class="landing-logo">
           <mat-icon class="logo-icon-pulse">hub</mat-icon>
-          <span class="logo-text">Nexus Company</span>
+          <span class="logo-text">Nexus Company Intel</span>
         </div>
         @if (auth.isAuthenticated()) {
           <div class="landing-nav-actions">

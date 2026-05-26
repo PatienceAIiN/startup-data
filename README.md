@@ -1,4 +1,4 @@
-# Nexus Company | B2B Intelligence
+# Nexus Company Intel | B2B Intelligence
 
 A premium full-stack B2B intelligence platform designed to scrape, match, and explore Indian company listings from **Zauba Corp** and **data.gov.in**, storing processed records in **NeonDB** and exporting generated CSV/XLSX to **Cloudflare R2**.
 
