@@ -21,6 +21,7 @@ import { AuthService } from '../../core/services/auth.service';
         <div class="landing-logo">
           <mat-icon class="logo-icon-pulse">hub</mat-icon>
           <span class="logo-text">Nexus Company</span>
+        </div>
         @if (auth.isAuthenticated()) {
           <div class="landing-nav-actions">
             <a mat-flat-button routerLink="/dashboard" class="nav-enter-btn">

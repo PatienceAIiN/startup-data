@@ -115,12 +115,21 @@ async def list_companies(
     )
 
 
+_stats_cache = None
+_stats_cache_expiry = 0.0
+
 @router.get("/stats", response_model=CompanyStatsResponse)
 async def get_stats(
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
     db: AsyncSession = Depends(get_db),
 ):
     await get_current_user(credentials.credentials, db)
+
+    global _stats_cache, _stats_cache_expiry
+    import time
+    now = time.time()
+    if _stats_cache is not None and now < _stats_cache_expiry:
+        return _stats_cache
 
     total = (await db.execute(select(func.count()).select_from(MatchedCompany))).scalar() or 0
     matched = (await db.execute(
@@ -151,7 +160,7 @@ async def get_stats(
         .limit(10)
     )).all()
 
-    return CompanyStatsResponse(
+    res = CompanyStatsResponse(
         total_companies=total,
         matched_companies=matched,
         startups=startups,
@@ -160,6 +169,9 @@ async def get_stats(
         by_year={int(row.yr): row.cnt for row in year_rows if row.yr},
         last_scrape=None,
     )
+    _stats_cache = res
+    _stats_cache_expiry = now + 60.0 # Cache for 60 seconds
+    return res
 
 
 @router.get("/{company_id}")
