@@ -1,0 +1,19 @@
+use_default_settings: true
+server:
+  secret_key: "nexus-intel-searxng-secret-change-me"
+  limiter: false
+  image_proxy: false
+search:
+  formats:
+    - html
+    - json
+  safe_search: 0
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: wikipedia
+    disabled: false

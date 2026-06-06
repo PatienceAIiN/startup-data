@@ -7,4 +7,21 @@ services:
       - "8001:8000"
     env_file:
       - ./backend/.env
+    depends_on:
+      - searxng
     restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      - BASE_URL=http://localhost:8888/
+      - INSTANCE_NAME=nexus-searxng
+    volumes:
+      - ./searxng:/etc/searxng:rw,z
+    ports:
+      - "8888:8080"
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID

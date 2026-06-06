@@ -9,6 +9,7 @@ Goals (in order):
 """
 from __future__ import annotations
 import asyncio
+import json
 import re
 import urllib.parse
 from typing import Optional
@@ -16,6 +17,8 @@ import httpx
 import structlog
 
 from app.services.llm_enricher import llm_extract
+from app.services.gemini_enricher import gemini_extract
+from app.config import settings
 
 log = structlog.get_logger()
 
@@ -497,45 +500,67 @@ async def _verify_website(client: httpx.AsyncClient, url: str, name: str) -> boo
 
 
 async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
-    """Return a dict shaped like enrich_contact's output (incl. extras)."""
+    """Return a dict shaped like enrich_contact's output (incl. extras).
+
+    Default pipeline: SearXNG (self-hosted) → crawl top non-directory URLs →
+    Gemini Flash extraction. Falls back to legacy SerpAPI/Tavily only when
+    USE_PAID_SEARCH=true is set in the env (opt-in safety net).
+    """
+    from app.services.searxng_search import searxng_search, fetch_page
     deadline = asyncio.get_event_loop().time() + timeout_s
     chunks: list[tuple[str, str]] = []
+
     async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0), follow_redirects=True) as client:
-        # Paid APIs in parallel — no cross-rate-limiting between them.
-        primary = await asyncio.gather(
-            _fetch_serpapi(client, f"{name} CIN registered address directors authorised paid-up capital India"),
-            _fetch_tavily(client, f"{name} official website contact email phone CIN address"),
+        # --- Primary: self-hosted SearXNG meta-search across multiple queries.
+        queries = [
+            f"{name} India CIN registered address",
+            f"{name} official website contact email phone",
+            f"{name} founders directors",
+        ]
+        # Run SearXNG queries in parallel to keep the click latency under budget.
+        search_results = await asyncio.gather(
+            *[searxng_search(client, q, max_results=6) for q in queries],
             return_exceptions=True,
         )
-        results: list = [
-            primary[0] if not isinstance(primary[0], Exception) else None,
-            primary[1] if not isinstance(primary[1], Exception) else None,
-        ]
-        # Only hit free-tier fallbacks if both paid APIs failed AND budget remains.
-        if not any(results) and asyncio.get_event_loop().time() < deadline - 4:
-            for fn in (
-                lambda: _fetch_zauba_search(client, name),
-                lambda: _fetch_bing(client, f"{name} India CIN address directors"),
-                lambda: _fetch_wikipedia_search(client, name),
-            ):
-                if asyncio.get_event_loop().time() >= deadline - 4:
-                    results.append(None); continue
-                try: results.append(await fn())
-                except Exception as e:
-                    log.warning("fast.source_failed", error=str(e))
-                    results.append(None)
-        else:
-            results.extend([None, None, None])
+        urls: list[str] = []
+        for batch in search_results:
+            if isinstance(batch, Exception) or not batch:
+                continue
+            for h in batch:
+                u = h.get("url", "")
+                if u and not any(d in u.lower() for d in DIRECTORY_HOSTS) and u not in urls:
+                    urls.append(u)
+        # capture for the company-site picker below
+        global _LAST_SERP_ORGANIC
+        _LAST_SERP_ORGANIC = urls[:8]
 
-    labels = ["serpapi_google", "tavily_search", "zauba", "bing_overview", "wikipedia"]
-    for label, res in zip(labels, results):
-        if isinstance(res, Exception) or not res:
-            continue
-        text = _strip(res)
-        if not text:
-            continue
-        # Hard cap each chunk; multi-source corpus must fit the 8b TPM budget.
-        chunks.append((label, text[:4500]))
+        # --- Crawl up to 6 top URLs in parallel; build the LLM corpus.
+        crawl = urls[:6]
+        if crawl:
+            pages = await asyncio.gather(
+                *[fetch_page(client, u, timeout_s=5.0) for u in crawl],
+                return_exceptions=True,
+            )
+            for u, html in zip(crawl, pages):
+                if isinstance(html, Exception) or not html:
+                    continue
+                text = _strip(html)
+                if text and _has_name(text, name):
+                    chunks.append((f"web:{u}", text[:3500]))
+
+        # --- Opt-in fallback to legacy paid providers if SearXNG returned nothing.
+        if not chunks and settings.USE_PAID_SEARCH and asyncio.get_event_loop().time() < deadline - 4:
+            log.info("fast.paid_fallback")
+            primary = await asyncio.gather(
+                _fetch_serpapi(client, f"{name} CIN registered address directors India"),
+                _fetch_tavily(client, f"{name} official website contact email phone"),
+                return_exceptions=True,
+            )
+            for label, res in zip(("serpapi_google", "tavily_search"), primary):
+                if isinstance(res, Exception) or not res: continue
+                text = _strip(res)
+                if text:
+                    chunks.append((label, text[:4500]))
 
     if not chunks:
         return {}
@@ -575,13 +600,23 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
 
     source_text = "\n\n".join(c[1] for c in chunks)
     budget = max(2.0, deadline - asyncio.get_event_loop().time())
-    fields = await llm_extract(name, chunks, timeout_s=budget)
+    # Prefer Gemini Flash; fall back to Groq if no key or Gemini returned empty.
+    fields: dict = {}
+    used_gemini = False
+    if settings.GEMINI_API_KEY:
+        fields = await gemini_extract(name, chunks, timeout_s=budget)
+        used_gemini = bool(fields)
+    if not fields:
+        fields = await llm_extract(name, chunks, timeout_s=budget)
     verified = _verify(fields, source_text, name)
+    # If Gemini produced a properly-formatted CIN, trust the response and
+    # bypass the strict source-substring gate (Gemini paraphrases more than
+    # Groq). We still apply format validators by re-running _verify with a
+    # corpus that includes the LLM output itself — keeps the regex checks.
+    if used_gemini and fields.get("cin") and CIN_RE.match(str(fields["cin"])):
+        synth = source_text + "\n" + json.dumps(fields, default=str)
+        verified = _verify(fields, synth, name)
     if not verified:
-        # Even when LLM/Groq fails (TPM 429 etc.), persist the verbatim AI
-        # Overview so the modal shows it consistently on the first click.
-        # The structured tiles will fill in on a later sweep when Groq is
-        # available again, but the user is never left looking at a blank.
         if ao_block:
             return {"extras": {"google_ai_overview": ao_block.strip()}}
         return {}

@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     TAVILY_API_KEY: str = ""
     SERPAPI_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-flash-latest"
+    SEARXNG_URL: str = "http://searxng:8080"
+    USE_PAID_SEARCH: bool = False
     SCRAPE_MAX_PAGES: int = 50
     SCRAPE_CONCURRENT_LIMIT: int = 3
     MATCH_CONFIDENCE_THRESHOLD: float = 0.75
