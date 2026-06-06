@@ -98,6 +98,9 @@ async def list_startups(
             "logo_url": r.logo_url,
             "badges": r.badges or [],
             "dpiit_recognised": r.dpiit_recognised,
+            "dipp_number": r.dipp_number,
+            "contact_email": r.contact_email,
+            "contact_phone": r.contact_phone,
             "scraped_at": r.scraped_at.isoformat() if r.scraped_at else None,
         }
 
@@ -173,6 +176,22 @@ async def get_startup_by_cin(
     )).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Startup not found")
+    # Pull MCA capital / status from the mirror row so the modal can show
+    # financials sourced from the registry alongside startupindia data.
+    from app.models.company import MatchedCompany
+    mirror = (await db.execute(
+        select(MatchedCompany).where(MatchedCompany.cin == cin)
+    )).scalar_one_or_none()
+    extras = dict(row.extras or {})
+    if mirror is not None:
+        if mirror.authorised_capital is not None and "authorised_capital" not in extras:
+            extras["authorised_capital"] = mirror.authorised_capital
+        if mirror.paid_up_capital is not None and "paid_up_capital" not in extras:
+            extras["paid_up_capital"] = mirror.paid_up_capital
+        if mirror.date_of_incorporation and "date_of_incorporation" not in extras:
+            extras["date_of_incorporation"] = mirror.date_of_incorporation.isoformat()
+        if mirror.company_status and "company_status" not in extras:
+            extras["company_status"] = mirror.company_status
     return {
         "id": str(row.id),
         "profile_id": row.profile_id,
@@ -200,7 +219,7 @@ async def get_startup_by_cin(
         "scraped_at": row.scraped_at.isoformat() if row.scraped_at else None,
         "cin_real": row.cin_real,
         "gst": row.gst,
-        "extras": row.extras or {},
+        "extras": extras,
     }
 
 
@@ -228,16 +247,22 @@ async def enrich_startup(
     import asyncio as _asyncio
     import structlog
     from datetime import datetime
-    from app.services.contact_enricher import enrich_contact
+    from app.services.fast_enricher import fast_enrich
     log = structlog.get_logger()
+    # Click flow: fast (≤8s) httpx-only path with strict source verification.
+    # The deeper Playwright + site-crawl enricher still runs in the background
+    # scheduler sweep for thorough fills.
     try:
-        info = await _asyncio.wait_for(enrich_contact(row.company_name), timeout=28.0)
+        info = await _asyncio.wait_for(fast_enrich(row.company_name), timeout=10.0)
     except _asyncio.TimeoutError:
         log.warning("startups.enrich_timeout", cin=cin)
         return {"status": "timeout"}
     except Exception as e:
         log.error("startups.enrich_failed", cin=cin, error=str(e))
         return {"status": "error"}
+    if not info:
+        # Nothing verified — do NOT stamp enriched_at, so a refresh re-tries.
+        return {"status": "no_data"}
 
     # Prefer enriched values over existing nulls; don't overwrite good data with null
     if info.get("email"): row.contact_email = info["email"]

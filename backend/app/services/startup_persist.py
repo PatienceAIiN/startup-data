@@ -29,8 +29,19 @@ async def upsert_startups(db: AsyncSession, items: list[dict]) -> int:
             existing.badges = it.get("badges") or existing.badges
             existing.dpiit_recognised = bool(it.get("dpiit_recognised"))
             if it.get("dipp_number"): existing.dipp_number = it["dipp_number"]
+            # Merge service_areas/active_years into extras (don't clobber LLM extras)
+            extra_seed = {}
+            if it.get("service_areas"): extra_seed["service_areas"] = it["service_areas"]
+            if it.get("active_years"): extra_seed["active_years"] = it["active_years"]
+            if extra_seed:
+                merged = dict(existing.extras or {})
+                merged.update(extra_seed)
+                existing.extras = merged
             existing.raw = it.get("raw") or existing.raw
         else:
+            seed_extras: dict = {}
+            if it.get("service_areas"): seed_extras["service_areas"] = it["service_areas"]
+            if it.get("active_years"): seed_extras["active_years"] = it["active_years"]
             db.add(StartupIndiaCompany(
                 profile_id=pid,
                 profile_url=it.get("profile_url"),
@@ -46,6 +57,7 @@ async def upsert_startups(db: AsyncSession, items: list[dict]) -> int:
                 badges=it.get("badges") or [],
                 dpiit_recognised=bool(it.get("dpiit_recognised")),
                 dipp_number=it.get("dipp_number"),
+                extras=seed_extras or None,
                 raw=it.get("raw"),
             ))
             new_count += 1

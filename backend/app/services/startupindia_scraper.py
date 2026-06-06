@@ -404,6 +404,22 @@ class StartupIndiaScraper:
         logo_url = self._first(raw, "logo", "logoUrl", "image", "imageUrl")
         description = self._first(raw, "description", "shortDescription", "about", "summary")
 
+        # Extra fields visible on the public profile (Service Areas, No of
+        # Active Years). Different API revisions name these differently, so
+        # try the most common keys before falling back to None.
+        service_areas = _join_arr("serviceAreas") or _join_arr("services") or self._first(
+            raw, "serviceArea", "serviceAreas", "service_area"
+        )
+        active_years = self._first(
+            raw,
+            "noOfActiveYears",
+            "noOfYears",
+            "activeYears",
+            "activeYearsCount",
+            "yearsActive",
+            "age",
+        )
+
         badges = self._first(raw, "badges", "badgeList", default=[])
         if isinstance(badges, str):
             badges = [badges]
@@ -441,6 +457,8 @@ class StartupIndiaScraper:
             "badges": badges,
             "dpiit_recognised": dpiit,
             "dipp_number": (str(dipp_number) if dipp_number else None),
+            "service_areas": (str(service_areas).strip() if service_areas else None),
+            "active_years": (str(active_years).strip() if active_years else None),
             "raw": raw,
         }
 

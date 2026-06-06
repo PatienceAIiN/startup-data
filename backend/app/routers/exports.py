@@ -3,9 +3,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.database import get_db
 from app.models.company import MatchedCompany
+from app.models.startup import StartupIndiaCompany
 from app.models.export_file import ExportFile
 from app.services.auth_service import get_current_user
 from app.services.export_service import create_and_upload_export
@@ -28,7 +29,23 @@ async def export_companies(
 
     user = await get_current_user(credentials.credentials, db)
 
-    query = select(MatchedCompany)
+    # LEFT JOIN StartupIndiaCompany on the mirror's "SIH-<profile_id>" cin so
+    # exports can include city / email / phone / DPIIT for startup rows.
+    sih_profile = func.substr(MatchedCompany.cin, 5)  # strip "SIH-" prefix
+    query = (
+        select(
+            MatchedCompany,
+            StartupIndiaCompany.city,
+            StartupIndiaCompany.contact_email,
+            StartupIndiaCompany.contact_phone,
+            StartupIndiaCompany.dpiit_recognised,
+            StartupIndiaCompany.dipp_number,
+        )
+        .outerjoin(
+            StartupIndiaCompany,
+            StartupIndiaCompany.profile_id == sih_profile,
+        )
+    )
     if date_from:
         query = query.where(MatchedCompany.date_of_incorporation >= date_from)
     if date_to:
@@ -39,7 +56,7 @@ async def export_companies(
         query = query.where(MatchedCompany.is_startup == is_startup)
 
     query = query.order_by(MatchedCompany.date_of_incorporation.desc()).limit(50000)
-    companies = (await db.execute(query)).scalars().all()
+    rows = (await db.execute(query)).all()
 
     companies_dicts = [
         {
@@ -50,14 +67,19 @@ async def export_companies(
             "company_category": c.company_category,
             "date_of_incorporation": c.date_of_incorporation,
             "state": c.state,
+            "city": city,
             "authorised_capital": c.authorised_capital,
             "paid_up_capital": c.paid_up_capital,
             "match_score": c.match_score,
             "match_method": c.match_method,
             "is_startup": c.is_startup,
             "registered_address": c.registered_address,
+            "contact_email": contact_email,
+            "contact_phone": contact_phone,
+            "dpiit_recognised": bool(dpiit_recognised) if dpiit_recognised is not None else False,
+            "dipp_number": dipp_number,
         }
-        for c in companies
+        for c, city, contact_email, contact_phone, dpiit_recognised, dipp_number in rows
     ]
 
     filter_params = {

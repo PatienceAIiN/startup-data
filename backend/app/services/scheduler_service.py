@@ -123,7 +123,7 @@ async def enrich_tick():
         from datetime import datetime
         from app.database import AsyncSessionLocal
         from app.models.startup import StartupIndiaCompany
-        from app.services.contact_enricher import enrich_contact
+        from app.services.fast_enricher import fast_enrich
 
         async with AsyncSessionLocal() as db:
             # Postgres advisory lock so we don't double-run with multiple workers
@@ -133,11 +133,18 @@ async def enrich_tick():
                 return
 
             try:
-                # Pick rows that have never been enriched, oldest scraped first.
+                # Pick never-enriched rows OR rows whose enrichment is older than 30 days.
+                stale_cutoff = datetime.utcnow() - timedelta(days=30)
                 rows = (await db.execute(
                     select(StartupIndiaCompany)
-                    .where(StartupIndiaCompany.contact_enriched_at.is_(None))
-                    .order_by(StartupIndiaCompany.scraped_at.asc())
+                    .where(
+                        or_(
+                            StartupIndiaCompany.contact_enriched_at.is_(None),
+                            StartupIndiaCompany.contact_enriched_at < stale_cutoff,
+                        )
+                    )
+                    .order_by(StartupIndiaCompany.contact_enriched_at.asc().nulls_first(),
+                              StartupIndiaCompany.scraped_at.asc())
                     .limit(ENRICH_BATCH_SIZE)
                 )).scalars().all()
                 if not rows:
@@ -146,11 +153,15 @@ async def enrich_tick():
 
                 for row in rows:
                     try:
-                        info = await enrich_contact(row.company_name)
+                        info = await fast_enrich(row.company_name, timeout_s=10.0)
                     except Exception as e:
                         log.warning("enrich_tick.row_failed", cin=row.profile_id, error=str(e))
-                        # Mark enriched_at anyway so we don't loop forever on a bad name
-                        row.contact_enriched_at = datetime.utcnow()
+                        info = {}
+
+                    if not info:
+                        # Don't stamp enriched_at on a complete miss — a later
+                        # tick (or a click) gets another shot. Avoids the
+                        # bug where rows look "enriched" but have no data.
                         continue
 
                     if info.get("email"): row.contact_email = info["email"]
@@ -165,12 +176,8 @@ async def enrich_tick():
                         merged_extras = dict(row.extras or {})
                         merged_extras.update({k: v for k, v in info["extras"].items() if v})
                         if merged_extras: row.extras = merged_extras
-                    if info.get("source"):
-                        row.source_url = info["source"]
-                        row.website = (
-                            info["source"].split("/contact")[0].rstrip("/") + "/"
-                            if "/contact" in info["source"] else info["source"]
-                        )
+                    if info.get("website"):
+                        row.website = info["website"]
                     row.contact_enriched_at = datetime.utcnow()
 
                 await db.commit()

@@ -20,11 +20,16 @@ EXPORT_COLUMNS = [
     ("Category", "company_category"),
     ("Date of Incorporation", "date_of_incorporation"),
     ("State", "state"),
+    ("City", "city"),
     ("Authorised Capital", "authorised_capital"),
     ("Paid Up Capital", "paid_up_capital"),
     ("Match Score", "match_score"),
     ("Match Method", "match_method"),
     ("Is Startup", "is_startup"),
+    ("DPIIT Recognised", "dpiit_recognised"),
+    ("DIPP Number", "dipp_number"),
+    ("Email", "contact_email"),
+    ("Phone", "contact_phone"),
     ("Registered Address", "registered_address"),
 ]
 

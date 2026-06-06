@@ -35,8 +35,6 @@ export interface StartupDetail {
   contact_enriched_at: string | null;
   scraped_at: string | null;
   dipp_number?: string | null;
-  cin_real?: string | null;
-  gst?: string | null;
   extras?: Record<string, any>;
 }
 
@@ -141,8 +139,8 @@ export interface StartupDetailDialogData {
             <div class="sd-tile">
               <div class="sd-tile-icon">📅</div>
               <div>
-                <div class="sd-label">REGISTERED ON STARTUP INDIA</div>
-                <div class="sd-val">{{ v.scraped_at | date:'mediumDate' }}</div>
+                <div class="sd-label">INDEXED ON</div>
+                <div class="sd-val">{{ v.scraped_at | date:'mediumDate':'+0530' }}</div>
               </div>
             </div>
           }
@@ -173,7 +171,7 @@ export interface StartupDetailDialogData {
               </div>
             </div>
           }
-          @if (v.extras?.founded) {
+          @if (v.extras?.['founded']) {
             <div class="sd-tile">
               <div class="sd-tile-icon">📅</div>
               <div>
@@ -182,7 +180,7 @@ export interface StartupDetailDialogData {
               </div>
             </div>
           }
-          @if (v.extras?.headquarters) {
+          @if (v.extras?.['headquarters']) {
             <div class="sd-tile">
               <div class="sd-tile-icon">🏢</div>
               <div>
@@ -191,7 +189,7 @@ export interface StartupDetailDialogData {
               </div>
             </div>
           }
-          @if (v.extras?.founders) {
+          @if (v.extras?.['founders']) {
             <div class="sd-tile">
               <div class="sd-tile-icon">👤</div>
               <div>
@@ -200,7 +198,7 @@ export interface StartupDetailDialogData {
               </div>
             </div>
           }
-          @if (v.extras?.ceo) {
+          @if (v.extras?.['ceo']) {
             <div class="sd-tile">
               <div class="sd-tile-icon">🎖️</div>
               <div>
@@ -209,7 +207,7 @@ export interface StartupDetailDialogData {
               </div>
             </div>
           }
-          @if (v.extras?.employees) {
+          @if (v.extras?.['employees']) {
             <div class="sd-tile">
               <div class="sd-tile-icon">👥</div>
               <div>
@@ -218,7 +216,7 @@ export interface StartupDetailDialogData {
               </div>
             </div>
           }
-          @if (v.extras?.revenue) {
+          @if (v.extras?.['revenue']) {
             <div class="sd-tile">
               <div class="sd-tile-icon">💰</div>
               <div>
@@ -227,7 +225,7 @@ export interface StartupDetailDialogData {
               </div>
             </div>
           }
-          @if (v.extras?.parent) {
+          @if (v.extras?.['parent']) {
             <div class="sd-tile">
               <div class="sd-tile-icon">🌐</div>
               <div>
@@ -236,7 +234,7 @@ export interface StartupDetailDialogData {
               </div>
             </div>
           }
-          @if (v.extras?.type) {
+          @if (v.extras?.['type']) {
             <div class="sd-tile">
               <div class="sd-tile-icon">🏷️</div>
               <div>
@@ -246,13 +244,39 @@ export interface StartupDetailDialogData {
             </div>
           }
         </div>
-        @if (v.extras?.snippet) {
+        @if (v.extras?.['google_ai_overview']) {
+          <div class="sd-snippet sd-ai">
+            <div class="sd-snippet-head">✦ Google AI Overview</div>
+            <pre class="sd-ai-text">{{ v.extras!['google_ai_overview'] }}</pre>
+          </div>
+        }
+        @if (v.extras?.['snippet'] && !v.extras?.['google_ai_overview']) {
           <div class="sd-snippet">
             <div class="sd-snippet-head">From the web</div>
             <p>{{ v.extras!['snippet'] }}</p>
-            @if (v.extras?.wikipedia) {
+            @if (v.extras?.['wikipedia']) {
               <a [href]="v.extras!['wikipedia']" target="_blank" rel="noopener" class="sd-link">Wikipedia</a>
             }
+          </div>
+        }
+
+        @if (dynamicExtras(v).length || enriching()) {
+          <div class="sd-contact">
+            <div class="sd-contact-head">
+              <mat-icon>insights</mat-icon>
+              <span>Additional details</span>
+              @if (enriching()) {
+                <span class="sd-enriching">{{ enrichStage() }}</span>
+              }
+            </div>
+            <div class="sd-contact-grid">
+              @for (kv of dynamicExtras(v); track kv.key) {
+                <div>
+                  <div class="sd-label">{{ kv.label }}</div>
+                  <div class="sd-val">{{ kv.value }}</div>
+                </div>
+              }
+            </div>
           </div>
         }
 
@@ -262,7 +286,7 @@ export interface StartupDetailDialogData {
               <mat-icon>mail</mat-icon>
               <span>Contact</span>
               @if (enriching()) {
-                <span class="sd-enriching">finding details…</span>
+                <span class="sd-enriching">{{ enrichStage() }}</span>
               }
             </div>
             <div class="sd-contact-grid">
@@ -328,7 +352,10 @@ export interface StartupDetailDialogData {
     </div>
   `,
   styles: [`
-    .sd-dialog { padding: 0; color: var(--text-primary, #0f172a); }
+    .sd-dialog { padding: 0; color: var(--text-primary, #0f172a); background: var(--bg-secondary, #ffffff); }
+    /* Force the Material dialog surface to follow our theme tokens so the
+       container itself isn't stuck on white in dark mode. */
+    .mat-mdc-dialog-surface:has(.sd-dialog) { background: var(--bg-secondary, #ffffff) !important; }
     .sd-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 24px; border-bottom: 1px solid rgba(148,163,184,.25); background: linear-gradient(135deg, rgba(96,165,250,.08), rgba(16,185,129,.06)); }
     .sd-header-main { display: flex; gap: 16px; align-items: center; }
     .sd-logo { width: 56px; height: 56px; border-radius: 12px; background: rgba(96,165,250,.15); display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -340,9 +367,9 @@ export interface StartupDetailDialogData {
     .badge-startup { background: rgba(96,165,250,.15); color: #60a5fa; }
     .badge-dpiit { background: rgba(16,185,129,.15); color: #10b981; }
     .badge-soft { background: rgba(148,163,184,.18); color: #64748b; }
-    .sd-desc { padding: 16px 24px 0; color: #64748b; font-size: 14px; line-height: 1.5; }
+    .sd-desc { padding: 16px 24px 0; color: var(--text-secondary, #64748b); font-size: 14px; line-height: 1.5; }
     .sd-grid { padding: 16px 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .sd-tile { display: flex; gap: 12px; padding: 14px; border: 1px solid rgba(148,163,184,.22); border-radius: 10px; align-items: flex-start; background: rgba(248,250,252,.4); }
+    .sd-tile { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--border, rgba(148,163,184,.22)); border-radius: 10px; align-items: flex-start; background: var(--bg-tertiary, rgba(248,250,252,.4)); }
     .sd-tile-icon { font-size: 20px; line-height: 1; padding-top: 2px; }
     .sd-label { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #64748b; margin-bottom: 4px; }
     .sd-val { font-size: 14px; font-weight: 600; color: var(--text-primary, #0f172a); }
@@ -364,6 +391,9 @@ export interface StartupDetailDialogData {
       font-size: 13px; line-height: 1.5; color: var(--text-secondary, #475569);
     }
     .sd-snippet-head { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #60a5fa; margin-bottom: 6px; }
+    .sd-ai { border-left-color: #a855f7; }
+    .sd-ai .sd-snippet-head { color: #a855f7; }
+    .sd-ai-text { margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 13px; line-height: 1.55; color: var(--text-primary, #0f172a); }
     .sd-snippet p { margin: 0 0 6px; }
     .sd-tip {
       display: flex; align-items: center; gap: 8px;
@@ -373,7 +403,7 @@ export interface StartupDetailDialogData {
       border: 1px dashed rgba(96,165,250,0.35);
       border-radius: 10px;
       font-size: 12.5px;
-      color: #475569;
+      color: var(--text-secondary, #475569);
       line-height: 1.45;
     }
     .sd-tip-icon { font-size: 18px; width: 18px; height: 18px; color: #60a5fa; }
@@ -389,7 +419,27 @@ export class StartupDetailDialogComponent implements OnInit {
   s = signal<StartupDetail | null>(null);
   loading = signal(true);
   enriching = signal(false);
+  enrichStage = signal<string>('searching the web…');
   error = signal<string | null>(null);
+  private _stageTimer: any = null;
+
+  private cycleStages(): void {
+    const stages = [
+      'searching the web…',
+      'cross-checking sources…',
+      'verifying domain & registry…',
+      'extracting financials…',
+    ];
+    let i = 0;
+    this.enrichStage.set(stages[0]);
+    this._stageTimer = setInterval(() => {
+      i = Math.min(i + 1, stages.length - 1);
+      this.enrichStage.set(stages[i]);
+    }, 1500);
+  }
+  private stopStages(): void {
+    if (this._stageTimer) { clearInterval(this._stageTimer); this._stageTimer = null; }
+  }
 
   constructor(@Inject(MAT_DIALOG_DATA) public data: StartupDetailDialogData) {}
 
@@ -419,23 +469,27 @@ export class StartupDetailDialogComponent implements OnInit {
       next: (v) => {
         this.s.set(v);
         this.loading.set(false);
-        // Auto-kick enrichment if we don't have an email yet
-        if (!v.contact_email) this.runEnrichment(cin);
+        // Auto-kick enrichment if we don't yet have any enriched data
+        // (no email AND no LLM-derived extras like cin/directors/capital).
+        const hasExtras = !!(v.extras && Object.keys(v.extras).some(
+          k => !['company_status','authorised_capital','paid_up_capital','date_of_incorporation'].includes(k)));
+        if (!v.contact_email && !hasExtras) this.runEnrichment(cin);
       },
       error: () => { this.s.set(baseFromFallback); this.loading.set(false); },
     });
   }
 
   private _enrichAttempts = 0;
-  private _maxEnrichAttempts = 3;
+  private _maxEnrichAttempts = 1;
 
   private runEnrichment(cin: string): void {
     if (this._enrichAttempts >= this._maxEnrichAttempts) {
-      this.enriching.set(false);
+      this.enriching.set(false); this.stopStages();
       return;
     }
     this._enrichAttempts++;
     this.enriching.set(true);
+    this.cycleStages();
     this.http.post<{ status: string }>(`${environment.apiUrl}/startups/enrich/${encodeURIComponent(cin)}`, {}).subscribe({
       next: (res) => {
         this.http.get<StartupDetail>(`${environment.apiUrl}/startups/by-cin/${encodeURIComponent(cin)}`).subscribe({
@@ -449,14 +503,14 @@ export class StartupDetailDialogComponent implements OnInit {
                 && this._enrichAttempts < this._maxEnrichAttempts) {
               setTimeout(() => this.runEnrichment(cin), 1500);
             } else {
-              this.enriching.set(false);
+              this.enriching.set(false); this.stopStages();
             }
           },
           error: () => {
             if (this._enrichAttempts < this._maxEnrichAttempts) {
               setTimeout(() => this.runEnrichment(cin), 1500);
             } else {
-              this.enriching.set(false);
+              this.enriching.set(false); this.stopStages();
             }
           },
         });
@@ -465,7 +519,7 @@ export class StartupDetailDialogComponent implements OnInit {
         if (this._enrichAttempts < this._maxEnrichAttempts) {
           setTimeout(() => this.runEnrichment(cin), 1500);
         } else {
-          this.enriching.set(false);
+          this.enriching.set(false); this.stopStages();
         }
       },
     });
@@ -478,6 +532,27 @@ export class StartupDetailDialogComponent implements OnInit {
 
   hasAnyContact(v: StartupDetail): boolean {
     return !!(v.contact_email || v.contact_phone || v.website || v.linkedin_url || v.twitter_url || v.facebook_url);
+  }
+
+  // Keys already rendered as bespoke tiles above — exclude from the dynamic block.
+  private _renderedExtraKeys = new Set([
+    'founded', 'headquarters', 'founders', 'ceo', 'employees',
+    'revenue', 'parent', 'type', 'snippet', 'wikipedia',
+    'knowledge_panel', 'linkedin_company', 'google_ai_overview',
+  ]);
+
+  dynamicExtras(v: StartupDetail): { key: string; label: string; value: string }[] {
+    const ex = v.extras || {};
+    const out: { key: string; label: string; value: string }[] = [];
+    for (const k of Object.keys(ex)) {
+      if (this._renderedExtraKeys.has(k)) continue;
+      const raw = (ex as any)[k];
+      if (raw === null || raw === undefined || raw === '') continue;
+      const value = typeof raw === 'string' ? raw : (Array.isArray(raw) ? raw.join(', ') : String(raw));
+      const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      out.push({ key: k, label, value });
+    }
+    return out;
   }
 
   close(): void { this.ref.close(); }

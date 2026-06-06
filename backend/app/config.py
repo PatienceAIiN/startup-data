@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     ZAUBA_BASE_URL: str = "https://www.zaubacorp.com/company-list"
     DATAGOV_API_URL: str = "https://api.data.gov.in/resource/"
     DATAGOV_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    TAVILY_API_KEY: str = ""
+    SERPAPI_KEY: str = ""
     SCRAPE_MAX_PAGES: int = 50
     SCRAPE_CONCURRENT_LIMIT: int = 3
     MATCH_CONFIDENCE_THRESHOLD: float = 0.75

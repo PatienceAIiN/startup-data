@@ -122,7 +122,8 @@ def create_app() -> FastAPI:
             )
 
         # Hide server header where possible
-        response.headers.pop("Server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
         return response
 
     app.state.limiter = limiter

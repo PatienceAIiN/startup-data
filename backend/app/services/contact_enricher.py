@@ -382,77 +382,61 @@ async def _probe_candidate_domains(client: httpx.AsyncClient, name: str) -> Opti
 
 
 async def _google_enrichment(page, company_name: str) -> dict:
-    """Open a Google SERP and harvest the knowledge panel + featured snippet.
-    Returns a dict of extras (founded, headquarters, founders, employees, type,
-    industry, parent, ceo, revenue, …) — every field may be None."""
-    extras: dict = {
-        "founded": None, "headquarters": None, "founders": None,
-        "employees": None, "type": None, "ceo": None, "parent": None,
-        "revenue": None, "wikipedia": None, "linkedin_company": None,
-        "snippet": None, "knowledge_panel": None,
-    }
-    try:
-        q = company_name + " company India contact CIN"
-        await page.goto(
-            f"https://www.google.com/search?q={q}&hl=en",
-            wait_until="domcontentloaded",
-            timeout=15_000,
-        )
-        await asyncio.sleep(1.5)
-        # Knowledge panel — labels are in `.w8qArf` (label) with sibling `.kno-fv` (value)
-        data = await page.evaluate(
-            """
-            () => {
-              const out = {};
-              // Label / value pairs in the right-side knowledge panel
-              document.querySelectorAll('.w8qArf, .rVusze').forEach(label => {
-                const lbl = (label.innerText || '').replace(/:$/, '').trim();
-                let val = '';
-                const sib = label.nextElementSibling || label.parentElement?.querySelector('.kno-fv, .LrzXr');
-                if (sib) val = (sib.innerText || '').trim();
-                if (!val) {
-                  const parent = label.closest('.kno-vrt-t, .Z1hOCe, .rVusze');
-                  if (parent) val = (parent.innerText || '').replace(lbl, '').trim();
+    """Run two Google queries and return raw SERP text (incl. AI Overview).
+
+    Lets the downstream LLM parse CIN / registration date / capital /
+    directors / address instead of fighting selector churn. Also surfaces
+    wikipedia/linkedin links opportunistically.
+    """
+    out: dict = {"serp_text": "", "wikipedia": None, "linkedin_company": None}
+    queries = [
+        f"{company_name} India",
+        f"{company_name} CIN registered address authorised capital directors",
+    ]
+    blobs: list[str] = []
+    for q in queries:
+        try:
+            await page.goto(
+                f"https://www.google.com/search?q={q}&hl=en&gl=in",
+                wait_until="domcontentloaded",
+                timeout=15_000,
+            )
+            await asyncio.sleep(2.0)  # let AI Overview hydrate
+            data = await page.evaluate(
+                """
+                () => {
+                  // Grab AI Overview if present (jsname WBdPq / WaaZC / LT6XE wrappers vary)
+                  const ai = document.querySelector('[jsname="WBdPq"], [data-attrid*="AIOverview"], .WaaZC, .LT6XE, .ULSxyf');
+                  const aiText = ai ? (ai.innerText || '').trim() : '';
+                  // Whole results column
+                  const main = document.querySelector('#center_col, #search, #main') || document.body;
+                  const mainText = (main.innerText || '').trim();
+                  const links = Array.from(document.querySelectorAll('a')).map(a => a.href).filter(h => h && h.startsWith('http'));
+                  return {
+                    aiText,
+                    mainText: mainText.slice(0, 12000),
+                    wiki: links.find(h => h.includes('wikipedia.org')) || null,
+                    li: links.find(h => h.includes('linkedin.com/company/')) || null,
+                  };
                 }
-                if (lbl && val) out[lbl] = val;
-              });
-              // Featured snippet text
-              const snip = document.querySelector('.hgKElc, .ILfuVd, .yxjZuf');
-              const snippet = snip ? (snip.innerText || '').trim() : '';
-              // First organic result snippet as fallback
-              const firstSnippet = (document.querySelector('.VwiC3b, .MUxGbd') || {}).innerText || '';
-              // Wikipedia + LinkedIn company links anywhere on page
-              const links = Array.from(document.querySelectorAll('a')).map(a => a.href).filter(h => h && h.startsWith('http'));
-              const wiki = links.find(h => h.includes('wikipedia.org'));
-              const li = links.find(h => h.includes('linkedin.com/company/'));
-              return {kp: out, snippet, firstSnippet, wiki, li};
-            }
-            """
-        )
-        kp = (data or {}).get("kp") or {}
-        for k, v in kp.items():
-            kl = k.lower()
-            if "founded" in kl or "founding" in kl: extras["founded"] = v
-            elif "headquarter" in kl or "head office" in kl or "head quarter" in kl: extras["headquarters"] = v
-            elif "founder" in kl: extras["founders"] = v
-            elif "employee" in kl or "no. of employee" in kl: extras["employees"] = v
-            elif "type" == kl or "company type" in kl: extras["type"] = v
-            elif "ceo" in kl or "chief executive" in kl: extras["ceo"] = v
-            elif "parent" in kl: extras["parent"] = v
-            elif "revenue" in kl: extras["revenue"] = v
-            elif "industry" in kl and not extras.get("type"): extras["type"] = v
-        snip = (data or {}).get("snippet") or (data or {}).get("firstSnippet") or ""
-        if snip:
-            extras["snippet"] = snip[:600]
-        if (data or {}).get("wiki"):
-            extras["wikipedia"] = data["wiki"]
-        if (data or {}).get("li"):
-            extras["linkedin_company"] = data["li"]
-        if kp:
-            extras["knowledge_panel"] = kp
-    except Exception as e:
-        log.warning("contact.google_failed", error=str(e))
-    return extras
+                """
+            )
+            data = data or {}
+            chunk = ""
+            if data.get("aiText"):
+                chunk += "[AI OVERVIEW]\n" + data["aiText"] + "\n\n"
+            if data.get("mainText"):
+                chunk += data["mainText"]
+            if chunk:
+                blobs.append(f"--- google: {q} ---\n{chunk}")
+            if not out["wikipedia"] and data.get("wiki"):
+                out["wikipedia"] = data["wiki"]
+            if not out["linkedin_company"] and data.get("li"):
+                out["linkedin_company"] = data["li"]
+        except Exception as e:
+            log.warning("contact.google_query_failed", q=q, error=str(e))
+    out["serp_text"] = "\n\n".join(blobs)
+    return out
 
 
 async def _bing_first_result(page, query: str) -> Optional[str]:
@@ -541,21 +525,55 @@ async def enrich_contact(company_name: str) -> dict:
 
         # Google knowledge-panel enrichment — runs alongside site scraping for
         # extra business facts (founded, HQ, founders, employees, CEO, revenue).
+        # Google SERP harvest (AI Overview + main column raw text + wiki/li links).
         extras: dict = {}
+        google_chunk = ""
         if asyncio.get_event_loop().time() < deadline:
             try:
                 warm = await _get_warm_page()
                 gpage = await warm.context.new_page()
                 try:
-                    extras = await asyncio.wait_for(_google_enrichment(gpage, company_name), timeout=8.0)
+                    g = await asyncio.wait_for(_google_enrichment(gpage, company_name), timeout=16.0)
                 finally:
                     await gpage.close()
+                google_chunk = (g or {}).get("serp_text") or ""
+                if g and g.get("wikipedia"): extras["wikipedia"] = g["wikipedia"]
+                if g and g.get("linkedin_company"): extras["linkedin_company"] = g["linkedin_company"]
             except Exception as e:
                 log.warning("contact.google_setup_failed", error=str(e))
 
+        # Validate the chosen company website actually mentions the company name.
+        # Without this gate a generic site (zhihu.com etc.) can poison enrichment.
+        def _name_present(text: str, name: str) -> bool:
+            toks = [t for t in re.split(r"[^A-Za-z0-9]+", name.lower()) if len(t) >= 4
+                    and t not in {"private","limited","pvt","ltd","company","india","the"}]
+            if not toks:
+                return True
+            hay = (text or "").lower()
+            hits = sum(1 for t in toks if t in hay)
+            return hits >= max(1, len(toks) // 2)
+
+        if chosen and home_html and not _name_present(home_html, company_name):
+            log.info("contact.chosen_site_rejected_name_mismatch", site=chosen)
+            chosen, home_html = None, ""
+
         if not chosen:
-            return {"email": None, "phone": None, "address": None, "linkedin": None,
-                    "twitter": None, "facebook": None, "instagram": None,
+            # Still try the LLM on Google text alone — often contains AI Overview.
+            llm_only: dict = {}
+            if google_chunk:
+                try:
+                    from app.services.llm_enricher import llm_extract
+                    budget = max(2.0, min(18.0, deadline - asyncio.get_event_loop().time()))
+                    llm_only = await llm_extract(company_name, [("google_serp", google_chunk)], timeout_s=budget)
+                except Exception as e:
+                    log.warning("contact.llm_failed", error=str(e))
+            if llm_only:
+                for k, v in llm_only.items():
+                    if v: extras[k] = v
+            return {"email": llm_only.get("email"), "phone": llm_only.get("phone"),
+                    "address": llm_only.get("address"), "linkedin": llm_only.get("linkedin"),
+                    "twitter": llm_only.get("twitter"), "facebook": llm_only.get("facebook"),
+                    "instagram": llm_only.get("instagram"),
                     "source": None, "extras": extras or None}
 
         # 2) Deep crawl — home + likely internal pages
@@ -595,13 +613,57 @@ async def enrich_contact(company_name: str) -> dict:
         except asyncio.TimeoutError:
             results = []
 
+        # Keep raw HTML chunks for the LLM pass after the regex sweep.
+        # Only include pages that actually mention the company name, to avoid
+        # the LLM hallucinating from a stray off-topic page reached by a link.
+        raw_chunks: list[tuple[str, str]] = []
+        if home_html and _name_present(home_html, company_name):
+            raw_chunks.append(("homepage", home_html))
         for url, html in results:
             if not html:
                 continue
             info = _harvest_page(html)
             _merge(merged, info)
+            if _name_present(html, company_name):
+                raw_chunks.append((url, html))
             if any(k in url.lower() for k in CONTACT_KEYWORDS) and (info.get("email") or info.get("address")):
                 merged["source"] = url
+        if google_chunk:
+            raw_chunks.append(("google_serp", google_chunk))
+
+        # LLM-powered structured extraction over everything we collected.
+        # Best-effort: if Groq is down or slow, regex extractions still stand.
+        if raw_chunks and asyncio.get_event_loop().time() < deadline:
+            try:
+                from app.services.llm_enricher import llm_extract
+                budget = max(2.0, min(18.0, deadline - asyncio.get_event_loop().time()))
+                llm_fields = await llm_extract(company_name, raw_chunks, timeout_s=budget)
+            except Exception as e:
+                log.warning("contact.llm_failed", error=str(e))
+                llm_fields = {}
+        else:
+            llm_fields = {}
+
+        if llm_fields:
+            # Promote scalar contact fields to the top-level result if missing.
+            for src_key, dst_key in (
+                ("email", "email"), ("phone", "phone"), ("address", "address"),
+                ("linkedin", "linkedin"), ("twitter", "twitter"),
+                ("facebook", "facebook"), ("instagram", "instagram"),
+                ("cin", "cin"), ("gst", "gst"),
+            ):
+                v = llm_fields.get(src_key)
+                if v and not merged.get(dst_key):
+                    merged[dst_key] = v
+            # Everything else (founded, hq, revenue, capital, directors,
+            # service_areas, registration_date, registered_address …) rides
+            # in extras so the UI can render it dynamically. We pass through
+            # *every* non-contact LLM key to avoid silently dropping new ones.
+            top_level_keys = {"email","phone","address","linkedin","twitter",
+                              "facebook","instagram","cin","gst","source"}
+            for k, v in llm_fields.items():
+                if v and k not in top_level_keys:
+                    extras[k] = v
 
         if extras:
             merged["extras"] = extras
