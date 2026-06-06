@@ -52,13 +52,6 @@ export interface CompanyDetailDialogData {
                     Startup
                   </span>
                 }
-                @if (c.match_score >= 0.9) {
-                  <span class="cd-badge cd-badge-score-high">{{ (c.match_score * 100) | number:'1.0-0' }}% Match</span>
-                } @else if (c.match_score >= 0.75) {
-                  <span class="cd-badge cd-badge-score-mid">{{ (c.match_score * 100) | number:'1.0-0' }}% Match</span>
-                } @else {
-                  <span class="cd-badge cd-badge-score-low">{{ (c.match_score * 100) | number:'1.0-0' }}% Match</span>
-                }
               </div>
             </div>
           </div>
@@ -69,6 +62,10 @@ export interface CompanyDetailDialogData {
 
         <!-- Body -->
         <div class="cd-body">
+          <div class="cd-tip">
+            <mat-icon class="cd-tip-icon">tips_and_updates</mat-icon>
+            <span>Just opened and some details look empty? Close and tap the row again — we're still hydrating the latest info for this record.</span>
+          </div>
           <!-- Quick stats row -->
           <div class="cd-quick-stats">
             <div class="cd-quick-stat">
@@ -119,11 +116,11 @@ export interface CompanyDetailDialogData {
                   <div class="cd-field-value">{{ c.company_category || '—' }}</div>
                 </div>
                 <div class="cd-field">
-                  <div class="cd-field-label">Match Method</div>
-                  <div class="cd-field-value">{{ c.match_method || '—' }}</div>
+                  <div class="cd-field-label">Source</div>
+                  <div class="cd-field-value">{{ formatSource(c.match_method) }}</div>
                 </div>
                 <div class="cd-field">
-                  <div class="cd-field-label">Created</div>
+                  <div class="cd-field-label">Added on</div>
                   <div class="cd-field-value">{{ c.created_at | date:'medium' }}</div>
                 </div>
               </div>
@@ -291,9 +288,18 @@ export interface CompanyDetailDialogData {
     .cd-badge-active { background: rgba(52,211,153,0.15); color: #34d399; }
     .cd-badge-inactive { background: var(--bg-tertiary); color: var(--text-muted); }
     .cd-badge-startup { background: rgba(96,165,250,0.15); color: #60a5fa; }
-    .cd-badge-score-high { background: rgba(52,211,153,0.15); color: #34d399; }
-    .cd-badge-score-mid { background: rgba(251,191,36,0.15); color: #fbbf24; }
-    .cd-badge-score-low { background: rgba(239,68,68,0.15); color: #f87171; }
+    .cd-tip {
+      display: flex; align-items: center; gap: 8px;
+      margin: 16px 24px 0;
+      padding: 8px 12px;
+      background: rgba(96,165,250,0.08);
+      border: 1px dashed rgba(96,165,250,0.35);
+      border-radius: 10px;
+      font-size: 12.5px;
+      color: #475569;
+      line-height: 1.45;
+    }
+    .cd-tip-icon { font-size: 18px; width: 18px; height: 18px; color: #60a5fa; flex-shrink: 0; }
 
     .cd-close-btn {
       width: 36px;
@@ -582,6 +588,19 @@ export class CompanyDetailDialogComponent implements OnInit {
     if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)} Cr`;
     if (amount >= 100000) return `₹${(amount / 100000).toFixed(2)} L`;
     return `₹${amount.toLocaleString('en-IN')}`;
+  }
+
+  formatSource(method: string | null): string {
+    if (!method) return '—';
+    const map: Record<string, string> = {
+      'startupindia': 'Startup India',
+      'live_search': 'Live search',
+      'auto_seed': 'Daily import',
+      'csv_seed': 'Bulk import',
+      'synthetic_seed': 'Sample data',
+      'manual_fix': 'Manual entry',
+    };
+    return map[method] || method;
   }
 
   copyDetails(): void {

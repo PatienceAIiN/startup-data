@@ -1,5 +1,7 @@
 import { Component, OnInit, OnDestroy, inject, signal, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
@@ -27,6 +29,8 @@ import { Company, CompanyFilter, CompanyStats } from '../../core/models/company.
 import { ScrapeJob, ExportHistory } from '../../core/models/api-response.model';
 import { ConfirmDialogComponent } from '../../core/dialogs/confirm-dialog.component';
 import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog/company-detail-dialog.component';
+import { StartupDetailDialogComponent } from '../companies/startup-detail-dialog/startup-detail-dialog.component';
+import { EnrichmentBusService } from '../../core/services/enrichment-bus.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -97,25 +101,28 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
               <div class="stat-value">{{ (stats()?.total_companies ?? 0) | number }}</div>
             </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon stat-icon-green"><mat-icon>verified</mat-icon></div>
-            <div class="stat-body">
-              <div class="stat-label">Matched</div>
-              <div class="stat-value c-green">{{ (stats()?.matched_companies ?? 0) | number }}</div>
-            </div>
-          </div>
-          <div class="stat-card">
+          <div class="stat-card" data-tour="stats-startups">
             <div class="stat-icon stat-icon-purple"><mat-icon>rocket_launch</mat-icon></div>
             <div class="stat-body">
               <div class="stat-label">Startups</div>
               <div class="stat-value c-blue">{{ (stats()?.startups ?? 0) | number }}</div>
             </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon stat-icon-yellow"><mat-icon>insights</mat-icon></div>
+          <div class="stat-card stat-card-live">
+            <div class="stat-icon stat-icon-green"><mat-icon>autorenew</mat-icon></div>
             <div class="stat-body">
-              <div class="stat-label">Avg Match Score</div>
-              <div class="stat-value c-yellow">{{ ((stats()?.avg_match_score ?? 0) * 100) | number:'1.0-1' }}%</div>
+              <div class="stat-label">
+                Live updates
+                <span class="live-dot" aria-hidden="true"></span>
+              </div>
+              <div class="stat-value c-green stat-live-text">Pulling in new startups continuously</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon stat-icon-yellow"><mat-icon>workspaces</mat-icon></div>
+            <div class="stat-body">
+              <div class="stat-label">Coverage</div>
+              <div class="stat-value c-yellow">{{ (allStates().length || 0) }} states</div>
             </div>
           </div>
         </section>
@@ -125,7 +132,7 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
 
           <!-- Search Bar (Hero) -->
           <div class="search-hero">
-            <div class="search-input-wrap">
+            <div class="search-input-wrap" data-tour="search-box">
               <mat-icon class="search-icon">search</mat-icon>
               <input
                 type="text"
@@ -143,95 +150,53 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                 <mat-icon>keyboard_return</mat-icon>
               </button>
             </div>
-            <button class="btn-filter-toggle" (click)="filtersOpen = !filtersOpen" [class.active]="filtersOpen">
+            <button class="btn-filter-toggle" (click)="filtersOpen = !filtersOpen" [class.active]="filtersOpen" data-tour="filter-toggle">
               <mat-icon>tune</mat-icon>
               <span>Filters</span>
               @if (activeFilterCount() > 0) {
                 <span class="filter-badge">{{ activeFilterCount() }}</span>
               }
             </button>
+            <button class="btn-filter-toggle tour-btn" (click)="startTour()" matTooltip="Show me around">
+              <mat-icon>tour</mat-icon>
+              <span>Tour</span>
+            </button>
           </div>
 
           <!-- Advanced Filters (collapsible) -->
           @if (filtersOpen) {
             <div class="filters-advanced">
-              <div class="filter-group">
-                <label class="filter-label">
-                  <mat-icon>event</mat-icon>
-                  Date Range
-                </label>
-                <div class="date-range-row">
-                  <div class="date-input-wrap">
-                    <span class="date-prefix">From</span>
-                    <input
-                      type="date"
-                      class="date-input"
-                      [(ngModel)]="filter.dateFrom"
-                      (change)="loadData()"
-                    />
-                  </div>
-                  <span class="date-arrow">→</span>
-                  <div class="date-input-wrap">
-                    <span class="date-prefix">To</span>
-                    <input
-                      type="date"
-                      class="date-input"
-                      [(ngModel)]="filter.dateTo"
-                      (change)="loadData()"
-                    />
-                  </div>
-                </div>
-                <!-- Quick presets -->
-                <div class="date-presets">
-                  <button
-                    type="button"
-                    class="preset-chip"
-                    [class.active]="datePreset === '30d'"
-                    (click)="setDatePreset('30d')"
-                  >Last 30d</button>
-                  <button
-                    type="button"
-                    class="preset-chip"
-                    [class.active]="datePreset === '90d'"
-                    (click)="setDatePreset('90d')"
-                  >Last 90d</button>
-                  <button
-                    type="button"
-                    class="preset-chip"
-                    [class.active]="datePreset === '1y'"
-                    (click)="setDatePreset('1y')"
-                  >Last year</button>
-                  <button
-                    type="button"
-                    class="preset-chip"
-                    [class.active]="datePreset === '3y'"
-                    (click)="setDatePreset('3y')"
-                  >Last 3 years</button>
-                  <button
-                    type="button"
-                    class="preset-chip"
-                    [class.active]="datePreset === 'all'"
-                    (click)="setDatePreset('all')"
-                  >All time</button>
-                </div>
-              </div>
-
-              <div class="filter-group">
+              <div class="filter-group" data-tour="filter-state">
                 <label class="filter-label">
                   <mat-icon>place</mat-icon>
                   State
                 </label>
                 <mat-form-field appearance="outline" class="state-select-field">
                   <mat-select [(ngModel)]="filter.state" (ngModelChange)="onStateChange()" placeholder="All states">
-                    <mat-option value="">All States</mat-option>
-                    @for (s of topStates(); track s) {
+                    <mat-option [value]="undefined">All States</mat-option>
+                    @for (s of allStates(); track s) {
                       <mat-option [value]="s">{{ s }}</mat-option>
                     }
                   </mat-select>
                 </mat-form-field>
               </div>
 
-              <div class="filter-group">
+              <div class="filter-group" data-tour="filter-city">
+                <label class="filter-label">
+                  <mat-icon>apartment</mat-icon>
+                  City
+                </label>
+                <mat-form-field appearance="outline" class="state-select-field">
+                  <mat-select [(ngModel)]="filter.city" (ngModelChange)="onCityChange()" [disabled]="!filter.state" placeholder="{{ filter.state ? 'All cities in ' + filter.state : 'Select a state first' }}">
+                    <mat-option [value]="undefined">All Cities</mat-option>
+                    @for (c of allCities(); track c) {
+                      <mat-option [value]="c">{{ c }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+              </div>
+
+              <div class="filter-group" data-tour="segmented-type">
                 <label class="filter-label">
                   <mat-icon>category</mat-icon>
                   Type
@@ -240,15 +205,9 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                   <button
                     type="button"
                     class="seg-btn"
-                    [class.active]="startupFilter === 'all'"
-                    (click)="setStartupFilter('all')"
-                  >All</button>
-                  <button
-                    type="button"
-                    class="seg-btn"
                     [class.active]="startupFilter === 'companies'"
                     (click)="setStartupFilter('companies')"
-                  >Companies Only</button>
+                  >Companies</button>
                   <button
                     type="button"
                     class="seg-btn"
@@ -256,7 +215,7 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                     (click)="setStartupFilter('startups')"
                   >
                     <mat-icon>rocket_launch</mat-icon>
-                    Startups Only
+                    Startups
                   </button>
                 </div>
               </div>
@@ -391,6 +350,44 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                 </td>
               </ng-container>
 
+              <!-- Startup-only columns -->
+              <ng-container matColumnDef="city">
+                <th mat-header-cell *matHeaderCellDef>City</th>
+                <td mat-cell *matCellDef="let c">{{ startupInfo(c)?.city || '—' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="industry">
+                <th mat-header-cell *matHeaderCellDef>Industry</th>
+                <td mat-cell *matCellDef="let c">{{ startupInfo(c)?.industry || c.company_category || '—' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="contact_email">
+                <th mat-header-cell *matHeaderCellDef>Email</th>
+                <td mat-cell *matCellDef="let c">
+                  @if (startupInfo(c)?.contact_email) {
+                    <a [href]="'mailto:' + startupInfo(c)!.contact_email" class="website-link">{{ startupInfo(c)!.contact_email }}</a>
+                  } @else {
+                    <span class="startup-no">—</span>
+                  }
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="contact_phone">
+                <th mat-header-cell *matHeaderCellDef>Phone</th>
+                <td mat-cell *matCellDef="let c">{{ startupInfo(c)?.contact_phone || '—' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="dpiit">
+                <th mat-header-cell *matHeaderCellDef>DPIIT</th>
+                <td mat-cell *matCellDef="let c">
+                  @if (startupInfo(c)?.dpiit_recognised) {
+                    <span class="startup-yes">✓</span>
+                  } @else {
+                    <span class="startup-no">—</span>
+                  }
+                </td>
+              </ng-container>
+
               <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
               <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
 
@@ -401,15 +398,8 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
                   } @else {
                     <div class="empty-state">
                       <mat-icon class="empty-icon">database</mat-icon>
-                      <h3>No companies yet</h3>
-                      <p>
-                        @if (auth.isAdmin()) {
-                          Click <strong>Run Scrape Now</strong> above to fetch data from Zauba Corp & data.gov.in.
-                          Auto-scrape runs daily at 2:00 PM IST.
-                        } @else {
-                          Data will appear here once an admin runs the scraper. Auto-scrape runs daily at 2:00 PM IST.
-                        }
-                      </p>
+                      <h3>No results</h3>
+                      <p>Try a different search or adjust your filters.</p>
                     </div>
                   }
                 </td>
@@ -450,6 +440,38 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
         }
 
       </main>
+
+      <!-- Tutorial Overlay -->
+      @if (tourOpen()) {
+        <div class="tour-overlay" (click)="endTour()"></div>
+        @if (tourTargetRect(); as rect) {
+          <div class="tour-spotlight" [style.top.px]="rect.top - 8" [style.left.px]="rect.left - 8" [style.width.px]="rect.width + 16" [style.height.px]="rect.height + 16"></div>
+          <div class="tour-card" [style.top.px]="rect.bottom + 16" [style.left.px]="rect.left">
+            <div class="tour-step">Step {{ tourStep() + 1 }} of {{ tourSteps.length }}</div>
+            <h3>{{ tourSteps[tourStep()].title }}</h3>
+            <p>{{ tourSteps[tourStep()].body }}</p>
+            <div class="tour-actions">
+              <button class="tour-skip" (click)="endTour()">Skip tour</button>
+              <button class="tour-next" (click)="nextTour()">
+                {{ tourStep() === tourSteps.length - 1 ? 'Got it' : 'Next' }}
+              </button>
+            </div>
+          </div>
+        } @else {
+          <!-- Target not yet in DOM — show a centered card so user can always proceed. -->
+          <div class="tour-card tour-card-center">
+            <div class="tour-step">Step {{ tourStep() + 1 }} of {{ tourSteps.length }}</div>
+            <h3>{{ tourSteps[tourStep()].title }}</h3>
+            <p>{{ tourSteps[tourStep()].body }}</p>
+            <div class="tour-actions">
+              <button class="tour-skip" (click)="endTour()">Skip tour</button>
+              <button class="tour-next" (click)="nextTour()">
+                {{ tourStep() === tourSteps.length - 1 ? 'Got it' : 'Next' }}
+              </button>
+            </div>
+          </div>
+        }
+      }
 
       <!-- Dashboard Footer -->
       <footer class="dash-footer">
@@ -1168,6 +1190,76 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
     .startup-yes { color: #60a5fa; font-size: 12px; font-weight: 700; }
     .startup-no { color: var(--text-muted); font-size: 12px; }
 
+    /* ===== First-time tour ===== */
+    .tour-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,0.65);
+      z-index: 1500;
+      animation: tourFade .2s ease;
+    }
+    @keyframes tourFade { from { opacity: 0; } to { opacity: 1; } }
+    .tour-spotlight {
+      position: fixed; z-index: 1501;
+      border-radius: 12px;
+      box-shadow:
+        0 0 0 4px rgba(96,165,250,0.7),
+        0 0 0 9999px rgba(15,23,42,0.55),
+        0 0 40px 4px rgba(96,165,250,0.45);
+      pointer-events: none;
+      transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
+      animation: tourPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes tourPulse {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(96,165,250,0.7), 0 0 0 9999px rgba(15,23,42,0.55), 0 0 30px 2px rgba(96,165,250,0.3); }
+      50%       { box-shadow: 0 0 0 6px rgba(96,165,250,0.9), 0 0 0 9999px rgba(15,23,42,0.55), 0 0 60px 8px rgba(96,165,250,0.6); }
+    }
+    .tour-card {
+      position: fixed; z-index: 1502;
+      max-width: 360px;
+      background: var(--surface, #ffffff);
+      color: var(--text-primary, #0f172a);
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 12px 40px rgba(15,23,42,0.4);
+      border: 1px solid rgba(96,165,250,0.4);
+      animation: tourCardIn .25s ease;
+    }
+    @keyframes tourCardIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+    .tour-step { font-size: 11px; color: #60a5fa; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .tour-card h3 { margin: 6px 0 8px; font-size: 16px; font-weight: 700; }
+    .tour-card p { margin: 0 0 14px; font-size: 13px; color: var(--text-secondary, #475569); line-height: 1.5; }
+    .tour-actions { display: flex; justify-content: space-between; gap: 12px; }
+    .tour-skip {
+      background: transparent; border: none; color: #94a3b8; font-size: 13px; cursor: pointer; padding: 6px 10px;
+    }
+    .tour-skip:hover { color: var(--text-primary); }
+    .tour-next {
+      background: #2563eb; color: #fff; border: none; border-radius: 8px;
+      padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .tour-next:hover { background: #1d4ed8; }
+    .tour-btn { margin-left: 8px; }
+    .tour-card-center {
+      top: 50% !important; left: 50% !important;
+      transform: translate(-50%, -50%);
+    }
+    /* Live-updates indicator */
+    .stat-card-live .stat-label { display: inline-flex; align-items: center; gap: 8px; }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #10b981;
+      box-shadow: 0 0 0 0 rgba(16,185,129,.6);
+      animation: livePulse 1.6s ease-out infinite;
+      display: inline-block;
+    }
+    @keyframes livePulse {
+      0%   { box-shadow: 0 0 0 0 rgba(16,185,129,.55); }
+      70%  { box-shadow: 0 0 0 8px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+    .stat-live-text { font-size: 13px !important; font-weight: 500 !important; line-height: 1.3; }
+    .website-link { color: #60a5fa; font-size: 12px; text-decoration: none; border-bottom: 1px dashed currentColor; }
+    .website-link:hover { color: #93c5fd; }
+
     /* Empty state */
     .no-data-row { background: transparent !important; }
     .no-data-cell {
@@ -1271,6 +1363,8 @@ import { CompanyDetailDialogComponent } from '../companies/company-detail-dialog
   `],
 })
 export class DashboardComponent implements OnInit, OnDestroy {
+  private http = inject(HttpClient);
+  private enrichmentBus = inject(EnrichmentBusService);
   private companyService = inject(CompanyService);
   private scraperService = inject(ScraperService);
   private exportService = inject(ExportService);
@@ -1279,7 +1373,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
   theme = inject(ThemeService);
 
-  displayedColumns = ['company_name', 'cin', 'company_status', 'company_category', 'state', 'date_of_incorporation', 'authorised_capital', 'paid_up_capital', 'match_score', 'is_startup'];
+  // Column sets switch based on the active segment.
+  private companyColumns = ['company_name', 'cin', 'company_status', 'company_category', 'state', 'date_of_incorporation', 'authorised_capital', 'paid_up_capital'];
+  private startupColumns = ['company_name', 'industry', 'state', 'city', 'contact_email', 'contact_phone', 'dpiit'];
+  get displayedColumns(): string[] {
+    return this.startupFilter === 'startups' ? this.startupColumns : this.companyColumns;
+  }
+
+  // Per-row hydrated startup detail cache, keyed by CIN.
+  private _startupCache = new Map<string, any>();
+  private _startupInFlight = new Set<string>();
+  startupInfo(c: any): any | null {
+    if (!c?.is_startup || !c?.cin || !c.cin.startsWith('SIH-')) return null;
+    const cached = this._startupCache.get(c.cin);
+    if (cached) return cached;
+    if (!this._startupInFlight.has(c.cin)) {
+      this._startupInFlight.add(c.cin);
+      this.http.get<any>(`${environment.apiUrl}/startups/by-cin/${encodeURIComponent(c.cin)}`).subscribe({
+        next: (v) => { this._startupCache.set(c.cin, v); this._startupInFlight.delete(c.cin); },
+        error: () => { this._startupInFlight.delete(c.cin); },
+      });
+    }
+    return null;
+  }
 
   companies = signal<Company[]>([]);
   total = signal(0);
@@ -1289,38 +1405,245 @@ export class DashboardComponent implements OnInit, OnDestroy {
   currentJob = signal<ScrapeJob | null>(null);
   exportHistory = signal<ExportHistory[]>([]);
   topStates = signal<string[]>([]);
+  allStates = signal<string[]>([]);
+  allCities = signal<string[]>([]);
 
   filter: CompanyFilter = {
     page: 1,
     pageSize: 25,
-    dateFrom: undefined,
-    dateTo: undefined,
-    isStartup: false,
-    state: 'MAHARASHTRA',
+    state: undefined,
+    city: undefined,
+    isStartup: true,
   };
 
   searchValue = '';
-  startupFilter: 'all' | 'companies' | 'startups' = 'companies';
+  startupFilter: 'companies' | 'startups' = 'startups';
   filtersOpen = false;
-  datePreset: '30d' | '90d' | '1y' | '3y' | 'all' | 'custom' = 'all';
 
   private searchSubject = new Subject<string>();
   private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private statsPollInterval: ReturnType<typeof setInterval> | null = null;
+  private tablePollInterval: ReturnType<typeof setInterval> | null = null;
+  private searchRecheckTimer: ReturnType<typeof setTimeout> | null = null;
 
   ngOnInit(): void {
     this.loadData();
     this.loadStats();
     this.loadExportHistory();
+    this.startStatsAutoRefresh();
+    this.startTableAutoRefresh();
+    this.loadStates();
+
+    // Live-update table rows when the detail modal completes enrichment.
+    this.enrichmentBus.enriched().subscribe(({ cin, data }) => {
+      this._startupCache.set(cin, data);
+      // Refresh the rows() signal so Angular re-renders cells using the new cache.
+      this.companies.set([...this.companies()]);
+    });
+    // First-visit tutorial
+    if (typeof window !== 'undefined' && !localStorage.getItem('tour_seen_v1')) {
+      setTimeout(() => this.startTour(), 800);
+    }
+  }
+
+  loadStates(): void {
+    this.companyService.getStates().subscribe({
+      next: (r) => this.allStates.set(r.states || []),
+      error: () => {},
+    });
+  }
+
+  loadCities(state: string): void {
+    this.companyService.getCities(state).subscribe({
+      next: (r) => this.allCities.set(r.cities || []),
+      error: () => this.allCities.set([]),
+    });
+  }
+
+  onCityChange(): void {
+    this.filter.page = 1;
+    this.loadData();
+  }
+
+  // ---- Tour ----
+  tourOpen = signal(false);
+  tourStep = signal(0);
+  tourSteps: { selector: string; title: string; body: string; needsFilters?: boolean }[] = [
+    { selector: '[data-tour="search-box"]', title: 'Search any company or startup', body: 'Type a name and press Enter. If it\'s not in our directory yet, we\'ll fetch it from Startup India and pull contact details automatically.' },
+    { selector: '[data-tour="filter-toggle"]', title: 'Advanced filters', body: 'Open this to filter by state and city, or to switch between companies and startups.' },
+    { selector: '[data-tour="segmented-type"]', title: 'Choose what to see', body: 'Companies shows registry data. Startups shows the Startup India directory. Searching while on Startups also live-fetches new names.', needsFilters: true },
+    { selector: '[data-tour="filter-state"]', title: 'State', body: 'Pick a state to narrow the list.', needsFilters: true },
+    { selector: '[data-tour="filter-city"]', title: 'City', body: 'Pick a state first; cities populate based on what we have for that state.', needsFilters: true },
+    { selector: '[data-tour="stats-startups"]', title: 'Live count', body: 'This refreshes automatically as new startups are added to your directory.' },
+  ];
+
+  private _filtersOpenBeforeTour = false;
+
+  startTour(): void {
+    this._filtersOpenBeforeTour = this.filtersOpen;
+    this.tourStep.set(0);
+    this.tourOpen.set(true);
+    this._applyStepSideEffects();
+  }
+
+  nextTour(): void {
+    const next = this.tourStep() + 1;
+    if (next >= this.tourSteps.length) {
+      this.endTour();
+    } else {
+      this.tourStep.set(next);
+      this._applyStepSideEffects();
+    }
+  }
+
+  endTour(): void {
+    this.tourOpen.set(false);
+    // Restore the panel state the user had before the tour started.
+    this.filtersOpen = this._filtersOpenBeforeTour;
+    try { localStorage.setItem('tour_seen_v1', '1'); } catch {}
+  }
+
+  private _applyStepSideEffects(): void {
+    const step = this.tourSteps[this.tourStep()];
+    if (!step) return;
+    if (step.needsFilters && !this.filtersOpen) {
+      this.filtersOpen = true;
+    }
+  }
+
+  tourTargetRect(): DOMRect | null {
+    if (!this.tourOpen()) return null;
+    const sel = this.tourSteps[this.tourStep()]?.selector;
+    if (!sel) return null;
+    const el = document.querySelector(sel) as HTMLElement | null;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    // Treat zero-size / off-screen elements as missing (Angular hasn't rendered yet).
+    if (r.width === 0 && r.height === 0) return null;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return r;
   }
 
   executeSearch(): void {
     this.filter.search = this.searchValue || undefined;
     this.filter.page = 1;
+    const term = (this.searchValue || '').trim();
+    const wasStartupSearch = this.startupFilter === 'startups' && !!term;
     this.loadData();
+
+    if (!wasStartupSearch) return;
+
+    // After the initial DB-only search settles, if it found nothing,
+    // kick off the live Startup India lookup.
+    setTimeout(() => {
+      if (this.total() === 0 && (this.searchValue || '').trim() === term) {
+        this.runStartupLookup(term);
+      }
+    }, 400);
+  }
+
+  private runStartupLookup(name: string): void {
+    this.snack.open(`Checking Startup India for "${name}"…`, undefined, { duration: 8000 });
+    this.companyService.lookupStartup(name).subscribe({
+      next: (res) => {
+        if (this.searchValue !== name) return; // user moved on
+        if (res.status === 'found' || res.status === 'cached') {
+          // The state filter on the dashboard locks to Maharashtra by default,
+          // which would hide any startup from another state. Drop it for the
+          // name-based reveal so the user actually sees their result.
+          this.filter.state = undefined;
+          this.loadData();
+          this.loadStats();
+          this.snack.open(`Found "${name}" on Startup India — added to your list.`, 'Close', { duration: 4000 });
+        } else if (res.status === 'not_found') {
+          this.dialog.open(ConfirmDialogComponent, {
+            width: '440px',
+            data: {
+              title: 'Not on Startup India',
+              message: `We checked the Startup India directory and "${name}" isn't listed there. Please double-check the name or try a different spelling.`,
+              confirmText: 'OK',
+              cancelText: '',
+              icon: 'info',
+              variant: 'primary',
+            },
+          });
+        } else {
+          // 'unavailable' — likely transient network/source issue
+          const waitSeconds = 30;
+          this.dialog.open(ConfirmDialogComponent, {
+            width: '440px',
+            data: {
+              title: 'Hang tight',
+              message: `We're fetching "${name}" for you. Please check back in about ${waitSeconds} seconds — we'll have the details ready.`,
+              confirmText: 'OK',
+              cancelText: '',
+              icon: 'info',
+              variant: 'primary',
+            },
+          });
+          if (this.searchRecheckTimer) clearTimeout(this.searchRecheckTimer);
+          this.searchRecheckTimer = setTimeout(() => {
+            this.searchRecheckTimer = null;
+            if ((this.searchValue || '').trim() === name) {
+              this.runStartupLookup(name);
+            }
+          }, waitSeconds * 1000);
+        }
+      },
+      error: () => {
+        // Network error — quiet retry hint.
+        this.snack.open('Could not reach the directory. Please try again.', 'Close', { duration: 4000 });
+      },
+    });
   }
 
   ngOnDestroy(): void {
     if (this.pollInterval) clearInterval(this.pollInterval);
+    if (this.statsPollInterval) clearInterval(this.statsPollInterval);
+    if (this.tablePollInterval) clearInterval(this.tablePollInterval);
+    if (this.searchRecheckTimer) clearTimeout(this.searchRecheckTimer);
+  }
+
+  private startStatsAutoRefresh(): void {
+    if (this.statsPollInterval) return;
+    this.statsPollInterval = setInterval(() => this.loadStats(), 30000);
+  }
+
+  private startTableAutoRefresh(): void {
+    if (this.tablePollInterval) return;
+    this.tablePollInterval = setInterval(() => this.quietRefresh(), 30000);
+  }
+
+  /** Refetch current page + invalidate row-detail cache so columns repaint
+   *  with the latest enriched data — no spinner, no jump. */
+  private quietRefresh(): void {
+    // Pause if the user is mid-typing in the search box.
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active.tagName === 'INPUT' && active.classList.contains('search-input')) return;
+
+    this.companyService.getCompanies(this.filter).subscribe({
+      next: (res) => {
+        // Detect any change in the rows so we only repaint when needed.
+        const fresh = res.items || [];
+        const current = this.companies();
+        let changed = fresh.length !== current.length;
+        if (!changed) {
+          for (let i = 0; i < fresh.length; i++) {
+            if (current[i]?.id !== fresh[i]?.id) { changed = true; break; }
+          }
+        }
+        // Always trim the cache to current page CINs so we re-hydrate fresh data.
+        this._startupCache.clear();
+        if (changed || res.total !== this.total()) {
+          this.companies.set(fresh);
+          this.total.set(res.total);
+        } else {
+          // Same rows; still nudge the signal so the table reads the cleared cache.
+          this.companies.set([...current]);
+        }
+      },
+      error: () => { /* silent */ },
+    });
   }
 
   private _threeYearsAgo(): string {
@@ -1367,28 +1690,28 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   onStateChange(): void {
-    const st = this.filter.state ? this.filter.state.trim().toUpperCase() : '';
-    if (st !== 'MAHARASHTRA') {
-      const selectedState = this.filter.state || 'All States';
-      
-      // Force mat-select model update in next tick to reset dropdown selection visually
-      setTimeout(() => {
-        this.filter.state = 'MAHARASHTRA';
-      });
-
+    // Companies view is currently limited to Maharashtra coverage.
+    if (this.startupFilter === 'companies'
+        && this.filter.state
+        && this.filter.state.trim().toLowerCase() !== 'maharashtra') {
+      const tried = this.filter.state;
+      setTimeout(() => { this.filter.state = 'Maharashtra'; this.filter.city = undefined; this.allCities.set([]); });
       this.dialog.open(ConfirmDialogComponent, {
-        width: '400px',
+        width: '440px',
         data: {
-          title: 'State Data Unavailable',
-          message: `Currently data is available for Maharashtra only. We will update data for ${selectedState} soon!`,
-          confirmText: 'Got It',
+          title: 'Coming soon',
+          message: `Company data for ${tried} is on our roadmap — we'll have it ready shortly. For now company coverage is limited to Maharashtra. Switch to the Startups view to explore ${tried} now.`,
+          confirmText: 'Got it',
           cancelText: '',
           icon: 'info',
-          variant: 'primary'
-        }
+          variant: 'primary',
+        },
       });
       return;
     }
+    this.filter.city = undefined;
+    this.allCities.set([]);
+    if (this.filter.state) this.loadCities(this.filter.state);
     this.filter.page = 1;
     this.loadData();
   }
@@ -1408,49 +1731,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   resetFilters(): void {
     this.searchValue = '';
-    this.startupFilter = 'companies';
-    this.datePreset = 'all';
+    this.startupFilter = 'startups';
     this.filter = {
       page: 1,
       pageSize: 25,
-      dateFrom: undefined,
-      dateTo: undefined,
-      isStartup: false,
-      state: 'MAHARASHTRA',
+      state: undefined,
+      city: undefined,
+      isStartup: true,
     };
+    this.allCities.set([]);
     this.loadData();
   }
 
-
-
-  setDatePreset(preset: '30d' | '90d' | '1y' | '3y' | 'all'): void {
-    this.datePreset = preset;
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const subtract = (days: number) => {
-      const d = new Date();
-      d.setDate(d.getDate() - days);
-      return d.toISOString().split('T')[0];
-    };
-    switch (preset) {
-      case '30d': this.filter.dateFrom = subtract(30); this.filter.dateTo = todayStr; break;
-      case '90d': this.filter.dateFrom = subtract(90); this.filter.dateTo = todayStr; break;
-      case '1y':  this.filter.dateFrom = subtract(365); this.filter.dateTo = todayStr; break;
-      case '3y':  this.filter.dateFrom = subtract(365 * 3); this.filter.dateTo = todayStr; break;
-      case 'all': this.filter.dateFrom = undefined; this.filter.dateTo = undefined; break;
-    }
-    this.filter.page = 1;
-    this.loadData();
-  }
-
-  setStartupFilter(val: 'all' | 'companies' | 'startups'): void {
+  setStartupFilter(val: 'companies' | 'startups'): void {
     this.startupFilter = val;
-    if (val === 'all') {
-      this.filter.isStartup = undefined;
-    } else if (val === 'companies') {
-      this.filter.isStartup = false;
-    } else if (val === 'startups') {
-      this.filter.isStartup = true;
+    this.filter.isStartup = val === 'startups';
+    if (val === 'companies') {
+      // Companies view is Maharashtra-only — auto-apply.
+      if (!this.filter.state || this.filter.state.trim().toLowerCase() !== 'maharashtra') {
+        this.filter.state = 'Maharashtra';
+        this.filter.city = undefined;
+        this.allCities.set([]);
+        this.loadCities('Maharashtra');
+      }
     }
     this.filter.page = 1;
     this.loadData();
@@ -1460,13 +1763,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     let n = 0;
     if (this.searchValue) n++;
     if (this.filter.state) n++;
-    if (this.startupFilter !== 'companies') n++;
-    if (this.datePreset !== 'all') n++;
+    if (this.filter.city) n++;
     return n;
   }
 
   triggerScrape(): void {
-    this.scraperService.trigger(this.filter.dateFrom, this.filter.dateTo).subscribe({
+    this.scraperService.trigger(undefined, undefined).subscribe({
       next: (res) => {
         this.snack.open('Scrape job started! This may take several minutes.', 'Close', { duration: 4000 });
         this.scraping.set(true);
@@ -1503,7 +1805,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   exportFile(type: 'csv' | 'xlsx'): void {
     this.snack.open('Generating export…', undefined, { duration: 2000 });
-    this.exportService.export(type, this.filter.dateFrom, this.filter.dateTo, this.filter.state, this.filter.isStartup).subscribe({
+    this.exportService.export(type, undefined, undefined, this.filter.state, this.filter.isStartup).subscribe({
       next: (res) => {
         window.open(res.download_url, '_blank');
         this.loadExportHistory();
@@ -1513,6 +1815,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   openCompanyDialog(c: Company): void {
+    // All startup rows use the richer Startup India profile dialog.
+    if (c.is_startup) {
+      this.dialog.open(StartupDetailDialogComponent, {
+        data: {
+          cin: c.cin || null,
+          companyName: c.company_name,
+          fallback: {
+            state: c.state,
+            company_status: c.company_status,
+            company_category: c.company_category,
+            date_of_incorporation: c.date_of_incorporation,
+            website: c.website,
+            match_method: c.match_method,
+          },
+        },
+        panelClass: 'startup-detail-panel',
+        width: '760px',
+        maxWidth: '95vw',
+        maxHeight: '90vh',
+        autoFocus: false,
+      });
+      return;
+    }
     this.dialog.open(CompanyDetailDialogComponent, {
       data: { companyId: c.id, initialData: c },
       panelClass: 'company-detail-panel',

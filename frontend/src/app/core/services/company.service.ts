@@ -15,14 +15,22 @@ export class CompanyService {
       .set('page_size', filter.pageSize ?? 25);
 
     if (filter.search) params = params.set('search', filter.search);
-    if (filter.dateFrom) params = params.set('date_from', filter.dateFrom);
-    if (filter.dateTo) params = params.set('date_to', filter.dateTo);
     if (filter.state) params = params.set('state', filter.state);
+    if (filter.city) params = params.set('city', filter.city);
     if (filter.status) params = params.set('status', filter.status);
     if (filter.isStartup !== undefined) params = params.set('is_startup', String(filter.isStartup));
     if (filter.minScore !== undefined) params = params.set('min_score', String(filter.minScore));
 
     return this.http.get<CompanyPage>(this.apiUrl, { params });
+  }
+
+  getStates(): Observable<{ states: string[] }> {
+    return this.http.get<{ states: string[] }>(`${this.apiUrl}/states`);
+  }
+
+  getCities(state: string): Observable<{ state: string; cities: string[] }> {
+    const params = new HttpParams().set('state', state);
+    return this.http.get<{ state: string; cities: string[] }>(`${this.apiUrl}/cities`, { params });
   }
 
   getCompany(id: string): Observable<Company> {
@@ -31,5 +39,13 @@ export class CompanyService {
 
   getStats(): Observable<CompanyStats> {
     return this.http.get<CompanyStats>(`${this.apiUrl}/stats`);
+  }
+
+  lookupStartup(name: string): Observable<{ status: 'cached' | 'found' | 'not_found' | 'unavailable'; count?: number }> {
+    const params = new HttpParams().set('name', name);
+    return this.http.get<{ status: 'cached' | 'found' | 'not_found' | 'unavailable'; count?: number }>(
+      `${environment.apiUrl}/startups/lookup`,
+      { params },
+    );
   }
 }

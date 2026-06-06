@@ -34,20 +34,21 @@ def create_refresh_token(user_id: str) -> str:
 
 
 async def get_current_user(token: str, db: AsyncSession) -> User:
+    from fastapi import HTTPException
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if payload.get("type") != "access":
-            raise ValueError("Invalid token type")
+            raise HTTPException(status_code=401, detail="Invalid token type")
         user_id: str = payload.get("sub")
         if not user_id:
-            raise ValueError("Missing subject")
-    except JWTError as e:
-        raise ValueError(f"Token decode failed: {e}")
+            raise HTTPException(status_code=401, detail="Missing subject")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id), User.is_active == True))
     user = result.scalar_one_or_none()
     if not user:
-        raise ValueError("User not found or inactive")
+        raise HTTPException(status_code=401, detail="User not found or inactive")
     return user
 
 

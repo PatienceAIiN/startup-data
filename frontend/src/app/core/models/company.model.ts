@@ -13,6 +13,7 @@ export interface Company {
   match_method: string | null;
   is_startup: boolean;
   registered_address: string | null;
+  website: string | null;
   created_at: string;
 }
 
@@ -26,9 +27,8 @@ export interface CompanyPage {
 
 export interface CompanyFilter {
   search?: string;
-  dateFrom?: string;
-  dateTo?: string;
   state?: string;
+  city?: string;
   status?: string;
   isStartup?: boolean;
   minScore?: number;

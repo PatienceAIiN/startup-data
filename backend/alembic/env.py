@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.config import settings
 from app.database import Base
-from app.models import user, company, scrape_job, export_file  # noqa: F401
+from app.models import user, company, scrape_job, export_file, startup  # noqa: F401
 
 config = context.config
 db_url = settings.DATABASE_URL.replace("?sslmode=require", "?ssl=require").replace("&channel_binding=require", "")

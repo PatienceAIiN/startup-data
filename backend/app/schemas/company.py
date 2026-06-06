@@ -23,6 +23,7 @@ class MatchedCompanyResponse(CompanyBase):
     match_method: Optional[str] = None
     is_startup: bool
     registered_address: Optional[str] = None
+    website: Optional[str] = None
     created_at: datetime
 
 

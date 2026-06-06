@@ -11,9 +11,8 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
-    provideAnimations(), provideServiceWorker('ngsw-worker.js', {
-            enabled: !isDevMode(),
-            registrationStrategy: 'registerWhenStable:30000'
-          }),
+    provideAnimations(),
+    // Service worker disabled while iterating on UI so users always get the latest bundle.
+    provideServiceWorker('ngsw-worker.js', { enabled: false }),
   ],
 };

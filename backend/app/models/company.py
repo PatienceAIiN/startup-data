@@ -62,6 +62,7 @@ class MatchedCompany(Base):
     authorised_capital: Mapped[int | None] = mapped_column(BigInteger)
     paid_up_capital: Mapped[int | None] = mapped_column(BigInteger)
     registered_address: Mapped[str | None] = mapped_column(Text)
+    website: Mapped[str | None] = mapped_column(String(500))
     is_startup: Mapped[bool] = mapped_column(Boolean, default=False)
     incorporation_year: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
