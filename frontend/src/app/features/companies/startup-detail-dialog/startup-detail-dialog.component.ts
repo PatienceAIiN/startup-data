@@ -543,8 +543,45 @@ export class StartupDetailDialogComponent implements OnInit {
     });
   }
 
+  // Maps a CIN's 2-letter state code → canonical state name. Used to detect
+  // when startupindia's listed city/state contradicts the MCA-registered state.
+  private static CIN_STATE_MAP: { [k: string]: string } = {
+    MH: 'Maharashtra', DL: 'Delhi', KA: 'Karnataka', TN: 'Tamil Nadu',
+    TG: 'Telangana', AP: 'Andhra Pradesh', GJ: 'Gujarat', RJ: 'Rajasthan',
+    UP: 'Uttar Pradesh', MP: 'Madhya Pradesh', WB: 'West Bengal',
+    UT: 'Uttarakhand', UR: 'Uttarakhand', PB: 'Punjab', HR: 'Haryana',
+    OR: 'Odisha', BR: 'Bihar', JH: 'Jharkhand', KL: 'Kerala',
+    CT: 'Chhattisgarh', CH: 'Chandigarh', GA: 'Goa', AS: 'Assam',
+    ML: 'Meghalaya', MN: 'Manipur', TR: 'Tripura', MZ: 'Mizoram',
+    NL: 'Nagaland', AR: 'Arunachal Pradesh', SK: 'Sikkim',
+    JK: 'Jammu and Kashmir', PY: 'Puducherry',
+  };
+
   formatLocation(v: StartupDetail): string {
-    const parts = [v.city, v.state].filter(Boolean);
+    // MCA-registered city/state (from extras, set by the enricher's CIN-anchored
+    // extraction) is authoritative. Startupindia listings can be stale or list
+    // a service area instead of the registered office.
+    const extras = v.extras || {};
+    let city = (extras as any)['city'] || v.city || '';
+    let state = (extras as any)['state'] || v.state || '';
+    // If CIN provides a state code, force it as the canonical state. This
+    // catches the bug where startupindia says "Gwalior, MP" but CIN is UP.
+    const cin = (extras as any)['cin'] || v.cin_real || '';
+    if (typeof cin === 'string' && cin.length === 21) {
+      const code = cin.substr(6, 2).toUpperCase();
+      const mapped = StartupDetailDialogComponent.CIN_STATE_MAP[code];
+      if (mapped) {
+        if (state && state.toLowerCase() !== mapped.toLowerCase()) {
+          // Contradiction: trust CIN. Drop the startupindia city too because
+          // it likely belongs to the wrong state.
+          if (v.city && v.city.toLowerCase() === (city || '').toLowerCase()) {
+            city = '';
+          }
+        }
+        state = mapped;
+      }
+    }
+    const parts = [city, state].filter(Boolean);
     return parts.length ? parts.join(', ') : '—';
   }
 
@@ -557,6 +594,8 @@ export class StartupDetailDialogComponent implements OnInit {
     'founded', 'headquarters', 'founders', 'ceo', 'employees',
     'revenue', 'parent', 'type', 'snippet', 'wikipedia',
     'knowledge_panel', 'linkedin_company', 'google_ai_overview',
+    // Already surfaced as bespoke tiles or via formatLocation():
+    'city', 'state', 'cin',
   ]);
 
   dynamicExtras(v: StartupDetail): { key: string; label: string; value: string }[] {
