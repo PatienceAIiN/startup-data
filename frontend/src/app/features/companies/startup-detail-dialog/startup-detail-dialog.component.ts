@@ -245,9 +245,31 @@ export interface StartupDetailDialogData {
           }
         </div>
         @if (v.extras?.['google_ai_overview']) {
-          <div class="sd-snippet sd-ai">
-            <div class="sd-snippet-head">✦ Google AI Overview</div>
-            <pre class="sd-ai-text">{{ v.extras!['google_ai_overview'] }}</pre>
+          <div class="sd-ai-card">
+            <div class="sd-ai-head">
+              <span class="sd-ai-spark">✦</span>
+              <span>Google AI Overview</span>
+            </div>
+            <div class="sd-ai-body">
+              @for (b of parseAiOverview(v.extras!['google_ai_overview']); track $index) {
+                @if (b.type === 'heading') {
+                  <h4 class="sd-ai-h">{{ b.text }}</h4>
+                } @else if (b.type === 'list') {
+                  <ul class="sd-ai-list">
+                    @for (it of b.items; track $index) {
+                      <li>
+                        @if (it.title) {
+                          <strong>{{ it.title }}:</strong>
+                        }
+                        <span>{{ it.text }}</span>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="sd-ai-p">{{ b.text }}</p>
+                }
+              }
+            </div>
           </div>
         }
         @if (v.extras?.['snippet'] && !v.extras?.['google_ai_overview']) {
@@ -401,9 +423,45 @@ export interface StartupDetailDialogData {
       font-size: 13px; line-height: 1.5; color: var(--text-secondary, #475569);
     }
     .sd-snippet-head { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #60a5fa; margin-bottom: 6px; }
-    .sd-ai { border-left-color: #a855f7; }
-    .sd-ai .sd-snippet-head { color: #a855f7; }
-    .sd-ai-text { margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 13px; line-height: 1.55; color: var(--text-primary, #0f172a); }
+    /* Google AI Overview card */
+    .sd-ai-card {
+      margin: 0 24px 14px;
+      background: linear-gradient(180deg, rgba(168,85,247,0.06), rgba(168,85,247,0.02));
+      border: 1px solid rgba(168,85,247,0.25);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .sd-ai-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px;
+      background: rgba(168,85,247,0.10);
+      font-size: 12px; font-weight: 700; letter-spacing: .04em;
+      color: #a855f7; text-transform: uppercase;
+    }
+    .sd-ai-spark { font-size: 14px; }
+    .sd-ai-body { padding: 12px 16px 14px; color: var(--text-primary, #0f172a); }
+    .sd-ai-h { margin: 10px 0 6px; font-size: 13.5px; font-weight: 700; color: var(--text-primary, #0f172a); }
+    .sd-ai-h:first-child { margin-top: 0; }
+    .sd-ai-p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.55; color: var(--text-secondary, #475569); }
+    .sd-ai-p:last-child { margin-bottom: 0; }
+    .sd-ai-list { margin: 4px 0 10px; padding: 0; list-style: none; }
+    .sd-ai-list li {
+      position: relative;
+      padding: 6px 8px 6px 22px;
+      margin-bottom: 4px;
+      font-size: 13.5px; line-height: 1.5;
+      color: var(--text-primary, #0f172a);
+      background: var(--bg-tertiary, rgba(248,250,252,.5));
+      border-radius: 6px;
+      border-left: 2px solid #a855f7;
+    }
+    .sd-ai-list li::before {
+      content: "•";
+      position: absolute; left: 8px; top: 6px;
+      color: #a855f7; font-weight: 700;
+    }
+    .sd-ai-list li strong { color: var(--text-primary, #0f172a); margin-right: 4px; font-weight: 700; }
+    .sd-ai-list li span { color: var(--text-secondary, #475569); }
     .sd-snippet p { margin: 0 0 6px; }
     .sd-tip {
       display: flex; align-items: center; gap: 8px;
@@ -583,6 +641,42 @@ export class StartupDetailDialogComponent implements OnInit {
     }
     const parts = [city, state].filter(Boolean);
     return parts.length ? parts.join(', ') : '—';
+  }
+
+  // Parse the AI Overview plain text (produced by SerpAPI's flattener) into
+  // typed blocks for nice rendering. Format conventions:
+  //   "## text"       → heading
+  //   "- Title: text" → list item with title
+  //   "- text"        → bare list item
+  //   anything else   → paragraph
+  parseAiOverview(raw: string): Array<{type: 'heading' | 'paragraph' | 'list', text?: string, items?: {title?: string, text: string}[]}> {
+    if (!raw) return [];
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const out: any[] = [];
+    let currentList: {title?: string, text: string}[] | null = null;
+    const flushList = () => { if (currentList && currentList.length) out.push({type: 'list', items: currentList}); currentList = null; };
+    for (const line of lines) {
+      if (line.startsWith('## ')) {
+        flushList();
+        out.push({type: 'heading', text: line.slice(3).trim()});
+      } else if (line.startsWith('- ')) {
+        const body = line.slice(2).trim();
+        const colon = body.indexOf(': ');
+        let item: {title?: string, text: string};
+        if (colon > 0 && colon < 60) {
+          item = {title: body.slice(0, colon).trim(), text: body.slice(colon + 2).trim()};
+        } else {
+          item = {text: body};
+        }
+        currentList = currentList || [];
+        currentList.push(item);
+      } else {
+        flushList();
+        out.push({type: 'paragraph', text: line});
+      }
+    }
+    flushList();
+    return out;
   }
 
   hasAnyContact(v: StartupDetail): boolean {
