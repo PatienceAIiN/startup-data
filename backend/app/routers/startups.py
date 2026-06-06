@@ -262,12 +262,10 @@ async def enrich_startup(
             log.error("startups.enrich_failed", cin=cin, error=str(e))
             return {}
 
-    # First pass — short budget for fast happy path.
-    info = await _try(10.0)
-    # If the first attempt returned nothing (Groq TPM hit / source flake),
-    # immediately retry with a larger budget. Avoids "click → no data → reclick" UX.
-    if not info:
-        info = await _try(15.0)
+    # Single generous pass — most click latency comes from Groq cold-start
+    # or paid-API tail latency, not from the happy path. A 20s budget keeps
+    # us under Render's 30s HTTP timeout while giving the pipeline room.
+    info = await _try(20.0)
     if not info:
         # Nothing verified after retry — do NOT stamp enriched_at, so a manual
         # refresh re-tries. Surface a clear signal to the UI.

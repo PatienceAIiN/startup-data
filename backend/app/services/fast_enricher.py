@@ -578,6 +578,12 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
     fields = await llm_extract(name, chunks, timeout_s=budget)
     verified = _verify(fields, source_text, name)
     if not verified:
+        # Even when LLM/Groq fails (TPM 429 etc.), persist the verbatim AI
+        # Overview so the modal shows it consistently on the first click.
+        # The structured tiles will fill in on a later sweep when Groq is
+        # available again, but the user is never left looking at a blank.
+        if ao_block:
+            return {"extras": {"google_ai_overview": ao_block.strip()}}
         return {}
 
     # Punctuation-insensitive matcher used by the AO-vs-site source check.
@@ -626,6 +632,9 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
     )
     if not has_anchor:
         log.info("fast.drop_no_india_anchor", name=name, kept_fields=list(verified.keys()))
+        # Still surface AO text if Google had something — better than blank UI.
+        if ao_block:
+            return {"extras": {"google_ai_overview": ao_block.strip()}}
         return {}
     # Also drop any field that contains a clearly foreign anchor.
     FOREIGN_TOKENS = ("united states","new hampshire","california","texas","florida",
