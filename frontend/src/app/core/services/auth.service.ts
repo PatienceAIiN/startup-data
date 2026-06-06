@@ -13,6 +13,20 @@ export class AuthService {
 
   currentUser = signal<User | null>(this._loadUser());
 
+  constructor() {
+    // When the browser restores this tab from the bfcache (back/forward
+    // navigation), check whether the user is still authenticated. If they
+    // logged out in another tab — or if the stale page is showing a
+    // protected route — force a reload so the auth guard kicks in.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pageshow', (e: PageTransitionEvent) => {
+        if (e.persisted && !this.isAuthenticated()) {
+          window.location.replace('/');
+        }
+      });
+    }
+  }
+
   private _loadUser(): User | null {
     const u = localStorage.getItem('user');
     return u ? JSON.parse(u) : null;
@@ -31,11 +45,25 @@ export class AuthService {
   }
 
   logout(): void {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    // Wipe every trace of the session.
+    try {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+      // Defensive: clear anything else the app may have stashed.
+      sessionStorage.clear();
+    } catch {}
     this.currentUser.set(null);
-    this.router.navigate(['/']);
+    // Hard navigation + history replace — the browser back button can't
+    // return to /dashboard because that history entry is overwritten, and a
+    // full page load drops all in-memory Angular state (caches, signals,
+    // pending HTTP requests, etc.) so nothing leaks across sessions.
+    try {
+      window.location.replace('/');
+    } catch {
+      // Fallback for any non-browser context (SSR/tests).
+      this.router.navigate(['/'], { replaceUrl: true });
+    }
   }
 
   getToken(): string | null {
