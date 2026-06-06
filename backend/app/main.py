@@ -48,15 +48,28 @@ def create_app() -> FastAPI:
     # Restrict accepted Host headers in production — prevents host-header injection.
     if is_prod:
         from fastapi.middleware.trustedhost import TrustedHostMiddleware
+        # Build the allow-list from every configured URL: CORS origins,
+        # FRONTEND_URL, and BACKEND_URL. Render's own *.onrender.com host
+        # is always included so /health checks from the platform work.
+        candidate_urls: list[str] = list(settings.cors_origins_list)
+        for u in (settings.FRONTEND_URL, settings.BACKEND_URL):
+            if u and u not in candidate_urls:
+                candidate_urls.append(u)
         allowed_hosts: list[str] = []
-        for origin in settings.cors_origins_list:
+        for origin in candidate_urls:
             try:
-                allowed_hosts.append(urlparse(origin).hostname or "")
+                h = urlparse(origin).hostname
+                if h and h not in allowed_hosts:
+                    allowed_hosts.append(h)
             except Exception:
                 pass
-        allowed_hosts = [h for h in allowed_hosts if h]
+        # Always allow Render's wildcard so health-checks + zero-config
+        # backend-only access still work even if CORS_ORIGINS is misconfigured.
+        if not any(h.endswith(".onrender.com") for h in allowed_hosts):
+            allowed_hosts.append("*.onrender.com")
         if allowed_hosts:
             app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+            log.info("trusted_hosts", hosts=allowed_hosts)
 
     app.add_middleware(
         CORSMiddleware,

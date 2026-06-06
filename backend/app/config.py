@@ -42,10 +42,22 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
+        raw = (self.CORS_ORIGINS or "").strip()
+        if not raw:
+            return [self.FRONTEND_URL] if self.FRONTEND_URL else []
+        # Try JSON array first.
         try:
-            return json.loads(self.CORS_ORIGINS)
+            v = json.loads(raw)
+            if isinstance(v, list):
+                return [str(x).strip() for x in v if x]
+            if isinstance(v, str):
+                return [v]
         except Exception:
-            return [self.FRONTEND_URL]
+            pass
+        # Fallback: comma-separated or bare URL.
+        if "," in raw:
+            return [p.strip() for p in raw.split(",") if p.strip()]
+        return [raw]
 
 
 settings = Settings()
