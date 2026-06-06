@@ -116,6 +116,11 @@ def _ai_overview_text(ao: dict) -> str:
     return "\n".join(out).strip()
 
 
+# Module-level capture of the most recent SerpAPI organic-result URLs so the
+# enricher can pick a candidate company website from them.
+_LAST_SERP_ORGANIC: list[str] = []
+
+
 async def _fetch_serpapi(client: httpx.AsyncClient, query: str) -> Optional[str]:
     """SerpAPI — returns Google SERP including AI Overview, knowledge graph,
     organic snippets. Requires SERPAPI_KEY."""
@@ -179,6 +184,13 @@ async def _fetch_serpapi(client: httpx.AsyncClient, query: str) -> Optional[str]
                     kg_lines.append(f"{k}: {v}")
             if kg_lines:
                 parts.append("[KNOWLEDGE GRAPH]\n" + "\n".join(kg_lines))
+        # capture organic URLs for the website-picker (excluding directories).
+        global _LAST_SERP_ORGANIC
+        _LAST_SERP_ORGANIC = []
+        for res in data.get("organic_results", [])[:8]:
+            link = res.get("link", "")
+            if link and not any(h in link.lower() for h in DIRECTORY_HOSTS):
+                _LAST_SERP_ORGANIC.append(link)
         for res in data.get("organic_results", [])[:8]:
             title = res.get("title", "")
             snippet = res.get("snippet", "")
@@ -350,8 +362,25 @@ def _valid_email(s: str) -> bool:
     return True
 
 
+DIRECTORY_HOSTS = (
+    "tracxn.com", "zaubacorp.com", "instafinancials.com", "wikipedia.org",
+    "linkedin.com/in/", "indiamart.com", "justdial.com", "tofler.in",
+    "thecompanycheck.com", "mca.gov.in", "startupindia.gov.in",
+    "crunchbase.com", "owler.com", "rocketreach.co", "growjo.com",
+    "newcompanyalert.in", "indianyellowpages.com", "tradeindia.com",
+    "exportersindia.com", "dnb.com", "bizapedia.com", "opencorporates.com",
+    "companies360.in", "themasterprofile.in", "kotwalfinancial.com",
+    "quickcompany.in", "rocsearch.com",
+)
+
+
 def _valid_url(s: str) -> bool:
-    return bool(URL_RE.match(s)) and "." in s and len(s) < 250
+    if not (URL_RE.match(s) and "." in s and len(s) < 250):
+        return False
+    sl = s.lower()
+    if any(h in sl for h in DIRECTORY_HOSTS):
+        return False
+    return True
 
 
 def _verify(fields: dict, source_text: str, name: str) -> dict:
@@ -405,6 +434,54 @@ def _verify(fields: dict, source_text: str, name: str) -> dict:
             out[k] = vs
             continue
     return out
+
+
+def _domain_matches_name(url: str, name: str) -> bool:
+    """Reject directory-style hits: the URL's domain must contain a name token."""
+    try:
+        host = urllib.parse.urlparse(url).hostname or ""
+        # Strip TLD, keep the second-level label.
+        root = host.split(".")[-2] if "." in host else host
+        return any(tok in root.lower() for tok in _name_tokens(name))
+    except Exception:
+        return False
+
+
+async def _fetch_company_site(client: httpx.AsyncClient, candidates: list[str], name: str) -> tuple[Optional[str], Optional[str]]:
+    """Pick the first candidate URL whose DOMAIN reflects the company name
+    AND whose homepage actually mentions the company. Skips directory hosts.
+    Returns (chosen_url, combined_text_of_home_plus_contact_page)."""
+    candidates = [u for u in candidates if _domain_matches_name(u, name)]
+    for url in candidates[:4]:
+        try:
+            r = await client.get(url, timeout=4.0,
+                                 headers={"User-Agent": UA},
+                                 follow_redirects=True)
+            if r.status_code >= 400 or not r.text:
+                continue
+            home_text = _strip(r.text)[:8000]
+            if not _has_name(home_text, name):
+                continue
+            # Try to also grab /contact for richer contact details.
+            parts = [f"[HOMEPAGE: {url}]\n{home_text}"]
+            try:
+                base = urllib.parse.urlparse(url)
+                origin = f"{base.scheme}://{base.netloc}"
+                for path in ("/contact", "/contact-us", "/contactus", "/about", "/about-us"):
+                    r2 = await client.get(origin + path, timeout=3.0,
+                                          headers={"User-Agent": UA},
+                                          follow_redirects=True)
+                    if r2.status_code < 400 and r2.text:
+                        ct = _strip(r2.text)[:4000]
+                        if _has_name(ct, name):
+                            parts.append(f"[{path}]\n{ct}")
+                            break
+            except Exception:
+                pass
+            return url, "\n\n".join(parts)
+        except Exception:
+            continue
+    return None, None
 
 
 async def _verify_website(client: httpx.AsyncClient, url: str, name: str) -> bool:
@@ -463,17 +540,38 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
     if not chunks:
         return {}
 
-    # Authority filter: if SerpAPI's AI Overview returned an Indian CIN, that's
-    # the single source of truth. Drop other sources from the LLM corpus to
-    # prevent contamination from wrong same-named foreign companies.
+    # Extract Google AI Overview block (if SerpAPI captured one).
     serp = next((t for l, t in chunks if l == "serpapi_google"), "")
     ao_block = ""
     if "[GOOGLE AI OVERVIEW]" in serp:
         after = serp.split("[GOOGLE AI OVERVIEW]", 1)[1].lstrip("\n")
         ao_block = after.split("\n\n[", 1)[0]
-    if ao_block and re.search(r"[ULul]\d{5}[A-Za-z]{2}\d{4}[A-Za-z]{3}\d{6}", ao_block.replace(" ", "").replace("\n", "")):
-        log.info("fast.using_ai_overview_only")
-        chunks = [("google_ai_overview", "[GOOGLE AI OVERVIEW]\n" + ao_block)]
+    ao_has_cin = bool(ao_block) and bool(
+        re.search(r"[ULul]\d{5}[A-Za-z]{2}\d{4}[A-Za-z]{3}\d{6}",
+                  ao_block.replace(" ", "").replace("\n", ""))
+    )
+
+    # Per user mandate: contacts ONLY from (a) Google AI Overview OR
+    # (b) the company's own website. Fetch that website live from SerpAPI's
+    # organic-result candidates (directory hosts already excluded).
+    site_url, site_text = None, None
+    if _LAST_SERP_ORGANIC and asyncio.get_event_loop().time() < deadline - 4:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=3.0),
+                                         follow_redirects=True) as sclient:
+                site_url, site_text = await _fetch_company_site(sclient, _LAST_SERP_ORGANIC, name)
+        except Exception as e:
+            log.warning("fast.company_site_fetch_failed", error=str(e))
+
+    # Rebuild a clean LLM corpus from AO + company website only.
+    if ao_block or site_text:
+        clean_chunks: list[tuple[str, str]] = []
+        if ao_block:
+            clean_chunks.append(("google_ai_overview", "[GOOGLE AI OVERVIEW]\n" + ao_block))
+        if site_text:
+            clean_chunks.append(("company_site", site_text))
+        chunks = clean_chunks
+        log.info("fast.using_clean_corpus", ao=bool(ao_block), site=bool(site_url))
 
     source_text = "\n\n".join(c[1] for c in chunks)
     budget = max(2.0, deadline - asyncio.get_event_loop().time())
@@ -481,6 +579,38 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
     verified = _verify(fields, source_text, name)
     if not verified:
         return {}
+
+    # Punctuation-insensitive matcher used by the AO-vs-site source check.
+    def _norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", s.lower())
+
+    if ao_has_cin:
+        ao_n = _norm(ao_block)
+        site_n = _norm(site_text or "")
+        REGISTRY_FIELDS = {"cin", "directors", "address", "registered_address",
+                           "roc", "authorised_capital", "paid_up_capital",
+                           "registration_date", "founded", "company_status"}
+        for k in list(verified.keys()):
+            if k not in REGISTRY_FIELDS:
+                continue
+            v = verified[k]
+            if isinstance(v, list):
+                kept = [x for x in v if isinstance(x, str) and _norm(x) in ao_n]
+                if kept:
+                    verified[k] = kept
+                else:
+                    log.info("fast.drop_registry_not_in_ao", key=k)
+                    verified.pop(k, None)
+            elif isinstance(v, str):
+                vn = _norm(v)
+                if vn in ao_n or (vn and vn in site_n):
+                    continue
+                digits = re.sub(r"\D", "", v)
+                ao_digits = re.sub(r"\D", "", ao_block)
+                if len(digits) >= 5 and digits in ao_digits:
+                    continue
+                log.info("fast.drop_registry_not_in_ao", key=k, value=v[:80])
+                verified.pop(k, None)
 
     # India-anchor gate (hard). Indian companies always have CINs; if none
     # was extracted, require a strong Indian extracted anchor in the FIELDS
@@ -600,12 +730,10 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
     extras = {k: v for k, v in verified.items() if k not in set(CONTACT_KEYS) | {"source"}}
     # Carry the verbatim Google AI Overview block so the modal can show it
     # as-rendered alongside the LLM-parsed structured fields.
-    for label, text in chunks:
-        if label == "serpapi_google" and "[GOOGLE AI OVERVIEW]" in text:
-            ai_section = text.split("[GOOGLE AI OVERVIEW]\n", 1)[1].split("\n\n[", 1)[0].strip()
-            if ai_section:
-                extras["google_ai_overview"] = ai_section
-            break
+    if ao_block:
+        extras["google_ai_overview"] = ao_block.strip()
+    if site_url:
+        extras.setdefault("website", site_url)
     if extras:
         out["extras"] = extras
     return out

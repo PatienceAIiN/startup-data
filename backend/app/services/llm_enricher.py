@@ -46,7 +46,16 @@ SYSTEM_PROMPT = (
     "registration_date, registered_address, roc, headquarters, founders, "
     "directors, ceo, employees, industry, sector, service_areas, "
     "active_years, parent, type, revenue, funding, authorised_capital, "
-    "paid_up_capital, cin, gst, dipp_number, description, snippet, wikipedia."
+    "paid_up_capital, cin, gst, dipp_number, description, snippet, wikipedia.\n\n"
+    "Contact-extraction priorities: "
+    "- email: ONLY accept addresses that look company-owned (custom domain "
+    "matching the company name, or info@/contact@/sales@ on the company "
+    "domain, or a free-provider address containing the company name in the "
+    "local part). Reject generic editorial / publisher emails. "
+    "- phone: prefer +91 / 0xx Indian formats. Reject generic helpline / "
+    "support numbers belonging to publishers or directories. "
+    "- website: ONLY return the company's own official site (not a Tracxn / "
+    "Zauba / InstaFinancials / Wikipedia / news article URL)."
 )
 
 _client: Optional[AsyncGroq] = None

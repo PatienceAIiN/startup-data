@@ -264,9 +264,9 @@ export interface StartupDetailDialogData {
           <div class="sd-contact">
             <div class="sd-contact-head">
               <mat-icon>insights</mat-icon>
-              <span>Additional details</span>
+              <span>Financial &amp; corporate details</span>
               @if (enriching()) {
-                <span class="sd-enriching">{{ enrichStage() }}</span>
+                <span class="sd-enriching">fetching financial info…</span>
               }
             </div>
             <div class="sd-contact-grid">
@@ -286,7 +286,7 @@ export interface StartupDetailDialogData {
               <mat-icon>mail</mat-icon>
               <span>Contact</span>
               @if (enriching()) {
-                <span class="sd-enriching">{{ enrichStage() }}</span>
+                <span class="sd-enriching">fetching contacts…</span>
               }
             </div>
             <div class="sd-contact-grid">
@@ -332,6 +332,16 @@ export interface StartupDetailDialogData {
                   <div class="sd-val">{{ v.contact_address }}</div>
                 </div>
               }
+            </div>
+          </div>
+        }
+
+        @if (!enriching() && enrichAttempted() && !hasAnyContact(v) && !dynamicExtras(v).length) {
+          <div class="sd-empty">
+            <mat-icon>search_off</mat-icon>
+            <div>
+              <div class="sd-empty-title">No verified data found yet</div>
+              <div class="sd-empty-sub">We could not confirm contact or financial details for this entity right now. Try again in a few minutes — sources may surface new info.</div>
             </div>
           </div>
         }
@@ -408,6 +418,12 @@ export interface StartupDetailDialogData {
     }
     .sd-tip-icon { font-size: 18px; width: 18px; height: 18px; color: #60a5fa; }
     .sd-error { padding: 24px; color: #ef4444; }
+    .sd-empty { display: flex; gap: 12px; align-items: flex-start; margin: 0 24px 12px;
+      padding: 14px 16px; border: 1px dashed var(--border, rgba(148,163,184,.4));
+      border-radius: 10px; background: var(--bg-tertiary, rgba(248,250,252,.4)); }
+    .sd-empty mat-icon { color: var(--text-muted, #94a3b8); }
+    .sd-empty-title { font-weight: 700; font-size: 14px; color: var(--text-primary, #0f172a); }
+    .sd-empty-sub { font-size: 12.5px; color: var(--text-secondary, #475569); margin-top: 4px; }
     @media (max-width: 720px) { .sd-grid { grid-template-columns: 1fr; } }
   `],
 })
@@ -420,6 +436,7 @@ export class StartupDetailDialogComponent implements OnInit {
   loading = signal(true);
   enriching = signal(false);
   enrichStage = signal<string>('searching the web…');
+  enrichAttempted = signal(false);
   error = signal<string | null>(null);
   private _stageTimer: any = null;
 
@@ -489,6 +506,7 @@ export class StartupDetailDialogComponent implements OnInit {
     }
     this._enrichAttempts++;
     this.enriching.set(true);
+    this.enrichAttempted.set(true);
     this.cycleStages();
     this.http.post<{ status: string }>(`${environment.apiUrl}/startups/enrich/${encodeURIComponent(cin)}`, {}).subscribe({
       next: (res) => {

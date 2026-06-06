@@ -252,16 +252,25 @@ async def enrich_startup(
     # Click flow: fast (≤8s) httpx-only path with strict source verification.
     # The deeper Playwright + site-crawl enricher still runs in the background
     # scheduler sweep for thorough fills.
-    try:
-        info = await _asyncio.wait_for(fast_enrich(row.company_name), timeout=10.0)
-    except _asyncio.TimeoutError:
-        log.warning("startups.enrich_timeout", cin=cin)
-        return {"status": "timeout"}
-    except Exception as e:
-        log.error("startups.enrich_failed", cin=cin, error=str(e))
-        return {"status": "error"}
+    async def _try(budget: float) -> dict:
+        try:
+            return await _asyncio.wait_for(fast_enrich(row.company_name, timeout_s=budget), timeout=budget + 2)
+        except _asyncio.TimeoutError:
+            log.warning("startups.enrich_timeout", cin=cin)
+            return {}
+        except Exception as e:
+            log.error("startups.enrich_failed", cin=cin, error=str(e))
+            return {}
+
+    # First pass — short budget for fast happy path.
+    info = await _try(10.0)
+    # If the first attempt returned nothing (Groq TPM hit / source flake),
+    # immediately retry with a larger budget. Avoids "click → no data → reclick" UX.
     if not info:
-        # Nothing verified — do NOT stamp enriched_at, so a refresh re-tries.
+        info = await _try(15.0)
+    if not info:
+        # Nothing verified after retry — do NOT stamp enriched_at, so a manual
+        # refresh re-tries. Surface a clear signal to the UI.
         return {"status": "no_data"}
 
     # Prefer enriched values over existing nulls; don't overwrite good data with null
