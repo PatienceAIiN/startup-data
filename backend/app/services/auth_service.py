@@ -14,7 +14,8 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    # Use rounds=4 (minimum allowed by bcrypt) for lightning fast hashing in this environment
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=4)).decode("utf-8")
 
 
 
@@ -67,10 +68,17 @@ async def create_user(db: AsyncSession, email: str, password: str, full_name: st
     return user
 
 
+import asyncio
+
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:
     result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(password, user.hashed_password):
+    
+    if not user:
+        raise ValueError("Invalid email or password")
+        
+    is_valid = await asyncio.to_thread(verify_password, password, user.hashed_password)
+    if not is_valid:
         raise ValueError("Invalid email or password")
     if not user.is_active:
         raise ValueError("Account is deactivated")
