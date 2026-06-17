@@ -17,10 +17,16 @@ router = APIRouter(prefix="/exports", tags=["exports"])
 @router.post("/{file_type}")
 async def export_companies(
     file_type: str,
+    search: Optional[str] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     state: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
     is_startup: Optional[bool] = Query(None),
+    min_score: Optional[float] = Query(None),
+    page: Optional[int] = Query(None),
+    page_size: Optional[int] = Query(None),
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
     db: AsyncSession = Depends(get_db),
 ):
@@ -46,16 +52,42 @@ async def export_companies(
             StartupIndiaCompany.profile_id == sih_profile,
         )
     )
+
+    from sqlalchemy import or_
+    if search:
+        query = query.where(or_(
+            MatchedCompany.company_name.ilike(f"%{search}%"),
+            MatchedCompany.cin.ilike(f"%{search}%"),
+            MatchedCompany.company_category.ilike(f"%{search}%"),
+            MatchedCompany.state.ilike(f"%{search}%"),
+        ))
     if date_from:
-        query = query.where(MatchedCompany.date_of_incorporation >= date_from)
+        query = query.where(or_(
+            MatchedCompany.date_of_incorporation >= date_from,
+            MatchedCompany.date_of_incorporation.is_(None),
+        ))
     if date_to:
-        query = query.where(MatchedCompany.date_of_incorporation <= date_to)
+        query = query.where(or_(
+            MatchedCompany.date_of_incorporation <= date_to,
+            MatchedCompany.date_of_incorporation.is_(None),
+        ))
     if state:
         query = query.where(MatchedCompany.state.ilike(f"%{state}%"))
+    if city:
+        query = query.where(StartupIndiaCompany.city.ilike(f"%{city}%"))
+    if status:
+        query = query.where(MatchedCompany.company_status.ilike(f"%{status}%"))
     if is_startup is not None:
         query = query.where(MatchedCompany.is_startup == is_startup)
+    if min_score is not None:
+        query = query.where(MatchedCompany.match_score >= min_score)
 
-    query = query.order_by(MatchedCompany.date_of_incorporation.desc()).limit(50000)
+    query = query.order_by(MatchedCompany.date_of_incorporation.desc())
+    if page is not None and page_size is not None:
+        query = query.offset((page - 1) * page_size).limit(page_size)
+    else:
+        query = query.limit(50000)
+
     rows = (await db.execute(query)).all()
 
     companies_dicts = [
@@ -74,8 +106,8 @@ async def export_companies(
             "match_method": c.match_method,
             "is_startup": c.is_startup,
             "registered_address": c.registered_address,
-            "contact_email": contact_email,
-            "contact_phone": contact_phone,
+            "contact_email": contact_email or c.contact_email,
+            "contact_phone": contact_phone or c.contact_phone,
             "dpiit_recognised": bool(dpiit_recognised) if dpiit_recognised is not None else False,
             "dipp_number": dipp_number,
         }
@@ -83,10 +115,16 @@ async def export_companies(
     ]
 
     filter_params = {
+        "search": search,
         "date_from": str(date_from) if date_from else None,
         "date_to": str(date_to) if date_to else None,
         "state": state,
+        "city": city,
+        "status": status,
         "is_startup": is_startup,
+        "min_score": min_score,
+        "page": page,
+        "page_size": page_size,
     }
 
     export_meta = await create_and_upload_export(

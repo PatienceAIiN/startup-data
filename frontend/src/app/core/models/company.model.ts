@@ -14,6 +14,8 @@ export interface Company {
   is_startup: boolean;
   registered_address: string | null;
   website: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   created_at: string;
 }
 

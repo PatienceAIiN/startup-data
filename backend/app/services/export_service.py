@@ -99,8 +99,8 @@ def generate_xlsx_bytes(companies: list[dict], sheet_title: str = "Nexus Intel E
     ws_summary.append(["Export Summary"])
     ws_summary.append(["Generated At", datetime.utcnow().isoformat()])
     ws_summary.append(["Total Records", len(companies)])
-    ws_summary.append(["Matched Records", sum(1 for c in companies if c.get("match_score", 0) > 0)])
-    ws_summary.append(["High Confidence (>90%)", sum(1 for c in companies if c.get("match_score", 0) >= 0.9)])
+    ws_summary.append(["Matched Records", sum(1 for c in companies if (c.get("match_score") or 0) > 0)])
+    ws_summary.append(["High Confidence (>90%)", sum(1 for c in companies if (c.get("match_score") or 0) >= 0.9)])
 
     output = io.BytesIO()
     wb.save(output)

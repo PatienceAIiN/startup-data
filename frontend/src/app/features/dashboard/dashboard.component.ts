@@ -237,14 +237,35 @@ import { EnrichmentBusService } from '../../core/services/enrichment-bus.service
             <div class="spacer"></div>
             <div class="export-group">
               <span class="export-label">Export:</span>
-              <button class="btn-export" (click)="exportFile('csv')" [disabled]="total() === 0">
+              <button class="btn-export" [matMenuTriggerFor]="csvMenu" [disabled]="total() === 0">
                 <mat-icon>description</mat-icon>
                 CSV
               </button>
-              <button class="btn-export" (click)="exportFile('xlsx')" [disabled]="total() === 0">
+              <mat-menu #csvMenu="matMenu">
+                <button mat-menu-item (click)="exportFile('csv', 'all')">
+                  <mat-icon>cloud_download</mat-icon>
+                  <span>Export all data</span>
+                </button>
+                <button mat-menu-item (click)="exportFile('csv', 'page')">
+                  <mat-icon>insert_drive_file</mat-icon>
+                  <span>Export current page</span>
+                </button>
+              </mat-menu>
+
+              <button class="btn-export" [matMenuTriggerFor]="xlsxMenu" [disabled]="total() === 0">
                 <mat-icon>grid_on</mat-icon>
                 Excel
               </button>
+              <mat-menu #xlsxMenu="matMenu">
+                <button mat-menu-item (click)="exportFile('xlsx', 'all')">
+                  <mat-icon>cloud_download</mat-icon>
+                  <span>Export all data</span>
+                </button>
+                <button mat-menu-item (click)="exportFile('xlsx', 'page')">
+                  <mat-icon>insert_drive_file</mat-icon>
+                  <span>Export current page</span>
+                </button>
+              </mat-menu>
             </div>
           </div>
         </section>
@@ -1803,9 +1824,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }, 5000);
   }
 
-  exportFile(type: 'csv' | 'xlsx'): void {
+  exportFile(type: 'csv' | 'xlsx', scope: 'all' | 'page'): void {
     this.snack.open('Generating export…', undefined, { duration: 2000 });
-    this.exportService.export(type, undefined, undefined, this.filter.state, this.filter.isStartup).subscribe({
+    const options = {
+      search: this.filter.search,
+      state: this.filter.state,
+      city: this.filter.city,
+      status: this.filter.status,
+      isStartup: this.filter.isStartup,
+      minScore: this.filter.minScore,
+      ...(scope === 'page' ? {
+        page: this.filter.page,
+        pageSize: this.filter.pageSize
+      } : {})
+    };
+    this.exportService.export(type, options).subscribe({
       next: (res) => {
         window.open(res.download_url, '_blank');
         this.loadExportHistory();

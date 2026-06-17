@@ -153,6 +153,42 @@ export interface CompanyDetailDialogData {
               </section>
             }
 
+            @if (c.contact_email || c.contact_phone || c.website) {
+              <section class="cd-section">
+                <h3 class="cd-section-title">
+                  <mat-icon>contact_phone</mat-icon>
+                  Contact & Web Presence
+                </h3>
+                <div class="cd-grid">
+                  @if (c.website) {
+                    <div class="cd-field">
+                      <div class="cd-field-label">Website</div>
+                      <div class="cd-field-value">
+                        <a [href]="c.website" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">
+                          {{ c.website }}
+                          <mat-icon style="font-size: 12px; width: 12px; height: 12px; vertical-align: middle;">open_in_new</mat-icon>
+                        </a>
+                      </div>
+                    </div>
+                  }
+                  @if (c.contact_email) {
+                    <div class="cd-field">
+                      <div class="cd-field-label">Email</div>
+                      <div class="cd-field-value">
+                        <a [href]="'mailto:' + c.contact_email" style="color: var(--accent); text-decoration: none;">{{ c.contact_email }}</a>
+                      </div>
+                    </div>
+                  }
+                  @if (c.contact_phone) {
+                    <div class="cd-field">
+                      <div class="cd-field-label">Phone</div>
+                      <div class="cd-field-value">{{ c.contact_phone }}</div>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
+
           </div>
         </div>
 
@@ -614,6 +650,9 @@ export class CompanyDetailDialogComponent implements OnInit {
       `Incorporated: ${c.date_of_incorporation || '—'}`,
       `Authorised Capital: ${c.authorised_capital ? this.formatINR(c.authorised_capital) : '—'}`,
       `Paid-Up Capital: ${c.paid_up_capital ? this.formatINR(c.paid_up_capital) : '—'}`,
+      `Website: ${c.website || '—'}`,
+      `Email: ${c.contact_email || '—'}`,
+      `Phone: ${c.contact_phone || '—'}`,
       `Address: ${c.registered_address || '—'}`,
     ].join('\n');
     navigator.clipboard.writeText(text).then(() => {
@@ -626,26 +665,21 @@ export class CompanyDetailDialogComponent implements OnInit {
     if (!c) return;
     this.exporting.set(true);
 
+    const headers = ['CIN', 'Company Name', 'Status', 'State', 'Inc. Date', 'Authorised Capital', 'Paid Up Capital', 'Match Score', 'Is Startup', 'Website', 'Email', 'Phone', 'Address'];
+    const row = [
+      c.cin || '', c.company_name, c.company_status || '', c.state || '',
+      c.date_of_incorporation || '', c.authorised_capital ?? '', c.paid_up_capital ?? '',
+      c.match_score, c.is_startup ? 'Yes' : 'No', c.website || '',
+      c.contact_email || '', c.contact_phone || '', c.registered_address || '',
+    ];
+
     if (type === 'csv') {
-      const headers = ['CIN', 'Company Name', 'Status', 'State', 'Inc. Date', 'Authorised Capital', 'Paid Up Capital', 'Match Score', 'Is Startup', 'Address'];
-      const row = [
-        c.cin || '', c.company_name, c.company_status || '', c.state || '',
-        c.date_of_incorporation || '', c.authorised_capital ?? '', c.paid_up_capital ?? '',
-        c.match_score, c.is_startup ? 'Yes' : 'No', c.registered_address || '',
-      ];
       const csv = headers.join(',') + '\n' + row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
       this._download(blob, `${c.company_name.replace(/[^a-z0-9]/gi, '_')}.csv`);
       this.exporting.set(false);
       this.snack.open('CSV downloaded', 'Close', { duration: 2000 });
     } else {
-      // For XLSX, fall back to CSV with .xls extension - keeps single-record export client-side
-      const headers = ['CIN', 'Company Name', 'Status', 'State', 'Inc. Date', 'Authorised Capital', 'Paid Up Capital', 'Match Score', 'Is Startup', 'Address'];
-      const row = [
-        c.cin || '', c.company_name, c.company_status || '', c.state || '',
-        c.date_of_incorporation || '', c.authorised_capital ?? '', c.paid_up_capital ?? '',
-        c.match_score, c.is_startup ? 'Yes' : 'No', c.registered_address || '',
-      ];
       let html = '<table><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
       html += '<tr>' + row.map(v => `<td>${String(v)}</td>`).join('') + '</tr></table>';
       const blob = new Blob([html], { type: 'application/vnd.ms-excel' });

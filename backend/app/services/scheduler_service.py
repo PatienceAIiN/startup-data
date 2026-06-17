@@ -113,7 +113,7 @@ _enrich_running = False
 
 
 async def enrich_tick():
-    """Pick the next batch of un-enriched startups and run scraper-2 on each."""
+    """Pick the next batch of un-enriched startups (or companies) and run fast_enrich on each."""
     global _enrich_running
     if _enrich_running:
         return
@@ -123,6 +123,7 @@ async def enrich_tick():
         from datetime import datetime
         from app.database import AsyncSessionLocal
         from app.models.startup import StartupIndiaCompany
+        from app.models.company import MatchedCompany
         from app.services.fast_enricher import fast_enrich
 
         async with AsyncSessionLocal() as db:
@@ -147,6 +148,27 @@ async def enrich_tick():
                               StartupIndiaCompany.scraped_at.asc())
                     .limit(ENRICH_BATCH_SIZE)
                 )).scalars().all()
+
+                is_startup_enrichment = True
+                if not rows:
+                    # Fallback to non-startup MatchedCompanies
+                    rows = (await db.execute(
+                        select(MatchedCompany)
+                        .where(
+                            and_(
+                                MatchedCompany.is_startup == False,
+                                or_(
+                                    MatchedCompany.contact_enriched_at.is_(None),
+                                    MatchedCompany.contact_enriched_at < stale_cutoff,
+                                )
+                            )
+                        )
+                        .order_by(MatchedCompany.contact_enriched_at.asc().nulls_first(),
+                                  MatchedCompany.created_at.asc())
+                        .limit(ENRICH_BATCH_SIZE)
+                    )).scalars().all()
+                    is_startup_enrichment = False
+
                 if not rows:
                     log.info("enrich_tick.idle")
                     return
@@ -155,33 +177,39 @@ async def enrich_tick():
                     try:
                         info = await fast_enrich(row.company_name, timeout_s=10.0)
                     except Exception as e:
-                        log.warning("enrich_tick.row_failed", cin=row.profile_id, error=str(e))
+                        log.warning("enrich_tick.row_failed", name=row.company_name, error=str(e))
                         info = {}
 
                     if not info:
-                        # Don't stamp enriched_at on a complete miss — a later
-                        # tick (or a click) gets another shot. Avoids the
-                        # bug where rows look "enriched" but have no data.
+                        # Don't stamp enriched_at on a complete miss so it can be re-tried later
                         continue
 
-                    if info.get("email"): row.contact_email = info["email"]
-                    if info.get("phone"): row.contact_phone = info["phone"]
-                    if info.get("address"): row.contact_address = info["address"]
-                    if info.get("linkedin"): row.linkedin_url = info["linkedin"]
-                    if info.get("twitter"): row.twitter_url = info["twitter"]
-                    if info.get("facebook"): row.facebook_url = info["facebook"]
-                    if info.get("cin"): row.cin_real = info["cin"]
-                    if info.get("gst"): row.gst = info["gst"]
-                    if info.get("extras"):
-                        merged_extras = dict(row.extras or {})
-                        merged_extras.update({k: v for k, v in info["extras"].items() if v})
-                        if merged_extras: row.extras = merged_extras
-                    if info.get("website"):
-                        row.website = info["website"]
+                    if is_startup_enrichment:
+                        if info.get("email"): row.contact_email = info["email"]
+                        if info.get("phone"): row.contact_phone = info["phone"]
+                        if info.get("address"): row.contact_address = info["address"]
+                        if info.get("linkedin"): row.linkedin_url = info["linkedin"]
+                        if info.get("twitter"): row.twitter_url = info["twitter"]
+                        if info.get("facebook"): row.facebook_url = info["facebook"]
+                        if info.get("cin"): row.cin_real = info["cin"]
+                        if info.get("gst"): row.gst = info["gst"]
+                        if info.get("extras"):
+                            merged_extras = dict(row.extras or {})
+                            merged_extras.update({k: v for k, v in info["extras"].items() if v})
+                            if merged_extras: row.extras = merged_extras
+                        if info.get("website"):
+                            row.website = info["website"]
+                    else:
+                        if info.get("email"): row.contact_email = info["email"]
+                        if info.get("phone"): row.contact_phone = info["phone"]
+                        if info.get("address") and not row.registered_address: row.registered_address = info["address"]
+                        if info.get("website") and not row.website: row.website = info["website"]
+                        if info.get("cin") and not row.cin: row.cin = info["cin"]
+
                     row.contact_enriched_at = datetime.utcnow()
 
                 await db.commit()
-                log.info("enrich_tick.done", processed=len(rows))
+                log.info("enrich_tick.done", processed=len(rows), type="startup" if is_startup_enrichment else "company")
             finally:
                 await db.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": ENRICH_LOCK_KEY})
                 await db.commit()

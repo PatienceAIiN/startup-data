@@ -60,6 +60,29 @@ async def _fetch_ddg(client: httpx.AsyncClient, query: str) -> Optional[str]:
             # Detect DDG CAPTCHA challenge — body mentions challenge text.
             if "Please complete the following challenge" in r.text or "Unfortunately, bots use DuckDuckGo too" in r.text:
                 return None
+            
+            # Parse links to populate _LAST_SERP_ORGANIC
+            global _LAST_SERP_ORGANIC
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(r.text, "html.parser")
+                ddg_links = []
+                for a in soup.find_all("a", href=True):
+                    href = a["href"]
+                    if "uddg=" in href:
+                        parsed = urllib.parse.urlparse(href)
+                        q = urllib.parse.parse_qs(parsed.query)
+                        if "uddg" in q:
+                            ddg_links.append(q["uddg"][0])
+                    elif href.startswith("http") and not any(x in href for x in ("duckduckgo.com", "ddg.gg")):
+                        ddg_links.append(href)
+                
+                for link in ddg_links:
+                    if link not in _LAST_SERP_ORGANIC and not any(h in link.lower() for h in DIRECTORY_HOSTS):
+                        _LAST_SERP_ORGANIC.append(link)
+            except Exception as pe:
+                log.warning("fast.ddg_parse_links_failed", error=str(pe))
+                
             return r.text
     except Exception as e:
         log.warning("fast.ddg_failed", q=query, error=str(e))
@@ -498,6 +521,8 @@ async def _verify_website(client: httpx.AsyncClient, url: str, name: str) -> boo
 
 async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
     """Return a dict shaped like enrich_contact's output (incl. extras)."""
+    global _LAST_SERP_ORGANIC
+    _LAST_SERP_ORGANIC = []
     deadline = asyncio.get_event_loop().time() + timeout_s
     chunks: list[tuple[str, str]] = []
     async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0), follow_redirects=True) as client:
@@ -514,6 +539,7 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
         # Only hit free-tier fallbacks if both paid APIs failed AND budget remains.
         if not any(results) and asyncio.get_event_loop().time() < deadline - 4:
             for fn in (
+                lambda: _fetch_ddg(client, f"{name} India CIN registered address directors"),
                 lambda: _fetch_zauba_search(client, name),
                 lambda: _fetch_bing(client, f"{name} India CIN address directors"),
                 lambda: _fetch_wikipedia_search(client, name),
@@ -525,9 +551,9 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
                     log.warning("fast.source_failed", error=str(e))
                     results.append(None)
         else:
-            results.extend([None, None, None])
+            results.extend([None, None, None, None])
 
-    labels = ["serpapi_google", "tavily_search", "zauba", "bing_overview", "wikipedia"]
+    labels = ["serpapi_google", "tavily_search", "duckduckgo", "zauba", "bing_overview", "wikipedia"]
     for label, res in zip(labels, results):
         if isinstance(res, Exception) or not res:
             continue

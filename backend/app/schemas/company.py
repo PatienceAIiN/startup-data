@@ -24,6 +24,8 @@ class MatchedCompanyResponse(CompanyBase):
     is_startup: bool
     registered_address: Optional[str] = None
     website: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
     created_at: datetime
 
 

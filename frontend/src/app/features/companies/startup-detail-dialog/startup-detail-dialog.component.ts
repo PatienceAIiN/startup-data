@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { environment } from '../../../../environments/environment';
 import { EnrichmentBusService } from '../../../core/services/enrichment-bus.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
 
 export interface StartupDetail {
   id: string;
@@ -369,8 +370,21 @@ export interface StartupDetailDialogData {
         }
 
         <div class="sd-actions">
+          <button mat-stroked-button color="primary" (click)="copyDetails()">
+            <mat-icon>content_copy</mat-icon>
+            Copy Details
+          </button>
+          <div style="flex: 1"></div>
+          <button mat-stroked-button color="primary" (click)="exportSingle('csv')" [disabled]="exporting()">
+            <mat-icon>description</mat-icon>
+            Export CSV
+          </button>
+          <button mat-stroked-button color="primary" (click)="exportSingle('xlsx')" [disabled]="exporting()">
+            <mat-icon>grid_on</mat-icon>
+            Export Excel
+          </button>
           @if (v.website) {
-            <a mat-stroked-button color="primary" [href]="v.website" target="_blank" rel="noopener">
+            <a mat-flat-button color="accent" [href]="v.website" target="_blank" rel="noopener">
               <mat-icon>language</mat-icon>
               Visit Website
             </a>
@@ -489,10 +503,12 @@ export class StartupDetailDialogComponent implements OnInit {
   private http = inject(HttpClient);
   private ref = inject(MatDialogRef<StartupDetailDialogComponent>);
   private bus = inject(EnrichmentBusService);
+  private snack = inject(MatSnackBar);
 
   s = signal<StartupDetail | null>(null);
   loading = signal(true);
   enriching = signal(false);
+  exporting = signal(false);
   enrichStage = signal<string>('searching the web…');
   enrichAttempted = signal(false);
   error = signal<string | null>(null);
@@ -707,4 +723,63 @@ export class StartupDetailDialogComponent implements OnInit {
   }
 
   close(): void { this.ref.close(); }
+
+  copyDetails(): void {
+    const s = this.s();
+    if (!s) return;
+    const text = [
+      `Company: ${s.company_name}`,
+      `CIN: ${s.cin_real || '—'}`,
+      `GST: ${s.gst || '—'}`,
+      `Stage: ${s.stage || '—'}`,
+      `Industry: ${s.industry || '—'}`,
+      `Sector: ${s.sector || '—'}`,
+      `Location: ${this.formatLocation(s)}`,
+      `Website: ${s.website || '—'}`,
+      `Email: ${s.contact_email || '—'}`,
+      `Phone: ${s.contact_phone || '—'}`,
+      `Address: ${s.contact_address || '—'}`,
+    ].join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      this.snack.open('Details copied to clipboard', 'Close', { duration: 2000 });
+    });
+  }
+
+  exportSingle(type: 'csv' | 'xlsx'): void {
+    const s = this.s();
+    if (!s) return;
+    this.exporting.set(true);
+
+    const headers = ['CIN', 'Company Name', 'GST', 'Stage', 'Industry', 'Sector', 'Location', 'Website', 'Email', 'Phone', 'Address', 'DPIIT Recognised', 'DIPP Number'];
+    const row = [
+      s.cin_real || '', s.company_name, s.gst || '', s.stage || '',
+      s.industry || '', s.sector || '', this.formatLocation(s), s.website || '',
+      s.contact_email || '', s.contact_phone || '', s.contact_address || '',
+      s.dpiit_recognised ? 'Yes' : 'No', s.dipp_number || '',
+    ];
+
+    if (type === 'csv') {
+      const csv = headers.join(',') + '\n' + row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+      this._download(blob, `${s.company_name.replace(/[^a-z0-9]/gi, '_')}.csv`);
+      this.exporting.set(false);
+      this.snack.open('CSV downloaded', 'Close', { duration: 2000 });
+    } else {
+      let html = '<table><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+      html += '<tr>' + row.map(v => `<td>${String(v)}</td>`).join('') + '</tr></table>';
+      const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+      this._download(blob, `${s.company_name.replace(/[^a-z0-9]/gi, '_')}.xls`);
+      this.exporting.set(false);
+      this.snack.open('Excel file downloaded', 'Close', { duration: 2000 });
+    }
+  }
+
+  private _download(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }
