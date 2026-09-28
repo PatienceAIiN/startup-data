@@ -86,7 +86,8 @@ async def export_companies(
     if page is not None and page_size is not None:
         query = query.offset((page - 1) * page_size).limit(page_size)
     else:
-        query = query.limit(50000)
+        # Increase limit to 5 Lakh to ensure we can export complete databases over 1 Lakh
+        query = query.limit(500000)
 
     rows = (await db.execute(query)).all()
 

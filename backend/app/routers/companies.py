@@ -156,6 +156,9 @@ async def get_stats(
         return _stats_cache
 
     total = (await db.execute(select(func.count()).select_from(MatchedCompany))).scalar() or 0
+    enriched = (await db.execute(
+        select(func.count()).select_from(MatchedCompany).where(MatchedCompany.contact_enriched_at.isnot(None))
+    )).scalar() or 0
     matched = (await db.execute(
         select(func.count()).select_from(MatchedCompany).where(MatchedCompany.match_score >= 0.75)
     )).scalar() or 0
@@ -186,6 +189,7 @@ async def get_stats(
 
     res = CompanyStatsResponse(
         total_companies=total,
+        enriched_companies=enriched,
         matched_companies=matched,
         startups=startups,
         avg_match_score=avg_score,

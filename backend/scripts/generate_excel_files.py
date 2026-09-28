@@ -106,26 +106,23 @@ async def main():
             }.items()
         })
 
-    print("Generating startup Excel spreadsheet bytes...", flush=True)
-    startup_xlsx = generate_xlsx_bytes(startup_dicts, sheet_title="Enriched Startups")
-    
-    print("Generating company Excel spreadsheet bytes...", flush=True)
-    company_xlsx = generate_xlsx_bytes(company_dicts, sheet_title="Enriched Companies")
+    print("Combining datasets...", flush=True)
+    # Combine them (exclude startups from company_dicts to avoid duplicates since startup_dicts has all of them)
+    non_startup_companies = [c for c in company_dicts if not c.get("is_startup")]
+    combined_dicts = startup_dicts + non_startup_companies
 
+    print("Generating combined Excel spreadsheet bytes...", flush=True)
+    combined_xlsx = generate_xlsx_bytes(combined_dicts, sheet_title="All Combined Data")
+    
     # Save files to workspace root
     workspace_root = Path("/app")
-    startup_path = workspace_root / "enriched_startups.xlsx"
-    company_path = workspace_root / "enriched_companies.xlsx"
+    combined_path = workspace_root / "all_combined_data.xlsx"
 
-    print(f"Writing startups spreadsheet to {startup_path}...", flush=True)
-    with open(startup_path, "wb") as f:
-        f.write(startup_xlsx)
+    print(f"Writing combined spreadsheet to {combined_path}...", flush=True)
+    with open(combined_path, "wb") as f:
+        f.write(combined_xlsx)
 
-    print(f"Writing companies spreadsheet to {company_path}...", flush=True)
-    with open(company_path, "wb") as f:
-        f.write(company_xlsx)
-
-    print("Spreadsheets generated successfully in workspace root!", flush=True)
+    print("Spreadsheet generated successfully in workspace root!", flush=True)
 
 if __name__ == "__main__":
     asyncio.run(main())

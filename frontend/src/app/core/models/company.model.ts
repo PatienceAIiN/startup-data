@@ -40,6 +40,7 @@ export interface CompanyFilter {
 
 export interface CompanyStats {
   total_companies: number;
+  enriched_companies: number;
   matched_companies: number;
   startups: number;
   avg_match_score: number;

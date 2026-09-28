@@ -108,14 +108,19 @@ import { EnrichmentBusService } from '../../core/services/enrichment-bus.service
               <div class="stat-value c-blue">{{ (stats()?.startups ?? 0) | number }}</div>
             </div>
           </div>
-          <div class="stat-card stat-card-live">
+          <div class="stat-card stat-card-live" data-tour="stats-enrichment">
             <div class="stat-icon stat-icon-green"><mat-icon>autorenew</mat-icon></div>
             <div class="stat-body">
               <div class="stat-label">
-                Live updates
-                <span class="live-dot" aria-hidden="true"></span>
+                Enrichment Progress
+                @if (stats()?.enriched_companies) {
+                  <span class="live-dot" aria-hidden="true"></span>
+                }
               </div>
-              <div class="stat-value c-green stat-live-text">Pulling in new startups continuously</div>
+              <div class="stat-value c-green stat-live-text">
+                {{ (stats()?.enriched_companies ?? 0) | number }} / {{ (stats()?.total_companies ?? 1) | number }}
+                ({{ ((stats()?.enriched_companies ?? 0) / (stats()?.total_companies || 1) * 100) | number:'1.0-2' }}%)
+              </div>
             </div>
           </div>
           <div class="stat-card">
@@ -202,6 +207,12 @@ import { EnrichmentBusService } from '../../core/services/enrichment-bus.service
                   Type
                 </label>
                 <div class="segmented-control">
+                  <button
+                    type="button"
+                    class="seg-btn"
+                    [class.active]="startupFilter === 'all'"
+                    (click)="setStartupFilter('all')"
+                  >All</button>
                   <button
                     type="button"
                     class="seg-btn"
@@ -1398,7 +1409,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private companyColumns = ['company_name', 'cin', 'company_status', 'company_category', 'state', 'date_of_incorporation', 'authorised_capital', 'paid_up_capital'];
   private startupColumns = ['company_name', 'industry', 'state', 'city', 'contact_email', 'contact_phone', 'dpiit'];
   get displayedColumns(): string[] {
-    return this.startupFilter === 'startups' ? this.startupColumns : this.companyColumns;
+    return (this.startupFilter === 'startups' || this.startupFilter === 'all') ? this.startupColumns : this.companyColumns;
   }
 
   // Per-row hydrated startup detail cache, keyed by CIN.
@@ -1438,7 +1449,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   };
 
   searchValue = '';
-  startupFilter: 'companies' | 'startups' = 'startups';
+  startupFilter: 'all' | 'companies' | 'startups' = 'startups';
   filtersOpen = false;
 
   private searchSubject = new Subject<string>();
@@ -1549,7 +1560,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.filter.search = this.searchValue || undefined;
     this.filter.page = 1;
     const term = (this.searchValue || '').trim();
-    const wasStartupSearch = this.startupFilter === 'startups' && !!term;
+    const wasStartupSearch = (this.startupFilter === 'startups' || this.startupFilter === 'all') && !!term;
     this.loadData();
 
     if (!wasStartupSearch) return;
@@ -1758,15 +1769,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       pageSize: 25,
       state: undefined,
       city: undefined,
-      isStartup: true,
+      isStartup: undefined, // Default to all
     };
     this.allCities.set([]);
     this.loadData();
   }
 
-  setStartupFilter(val: 'companies' | 'startups'): void {
+  setStartupFilter(val: 'all' | 'companies' | 'startups'): void {
     this.startupFilter = val;
-    this.filter.isStartup = val === 'startups';
+    this.filter.isStartup = val === 'all' ? undefined : (val === 'startups');
     if (val === 'companies') {
       // Companies view is Maharashtra-only — auto-apply.
       if (!this.filter.state || this.filter.state.trim().toLowerCase() !== 'maharashtra') {

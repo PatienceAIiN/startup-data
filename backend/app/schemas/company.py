@@ -39,6 +39,7 @@ class CompanyPageResponse(BaseModel):
 
 class CompanyStatsResponse(BaseModel):
     total_companies: int
+    enriched_companies: int
     matched_companies: int
     startups: int
     avg_match_score: float
