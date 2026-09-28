@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-flash-latest"
     SEARXNG_URL: str = "http://searxng:8080"
     USE_PAID_SEARCH: bool = False
+    CEREBRAS_API_KEY: str = ""
+    CEREBRAS_MODEL: str = "llama-3.3-70b"
     SCRAPE_MAX_PAGES: int = 50
     SCRAPE_CONCURRENT_LIMIT: int = 3
     MATCH_CONFIDENCE_THRESHOLD: float = 0.75

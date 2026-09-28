@@ -17,7 +17,8 @@ import httpx
 import structlog
 
 from app.services.llm_enricher import llm_extract
-from app.services.gemini_enricher import gemini_extract
+from app.services.gemini_enricher import gemini_extract, gemini_grounded_overview
+from app.services.cerebras_enricher import cerebras_extract
 from app.config import settings
 
 log = structlog.get_logger()
@@ -510,29 +511,55 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
     deadline = asyncio.get_event_loop().time() + timeout_s
     chunks: list[tuple[str, str]] = []
 
+    # Kick off Gemini's googleSearch-grounded overview in parallel with the
+    # SearXNG searches. Gemini returns an "AI Overview"-equivalent grounded
+    # in real Google results, which we render verbatim in the modal.
+    grounded_task = asyncio.create_task(
+        gemini_grounded_overview(name, timeout_s=min(15.0, timeout_s - 2))
+    ) if settings.GEMINI_API_KEY else None
+
     async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0), follow_redirects=True) as client:
-        # --- Primary: self-hosted SearXNG meta-search across multiple queries.
+        # --- Primary: Tavily AI search (paid, 1000/mo free tier).
+        # Fall back to self-hosted SearXNG if Tavily key absent or returns empty.
         queries = [
             f"{name} India CIN registered address",
             f"{name} official website contact email phone",
             f"{name} founders directors",
         ]
-        # Run SearXNG queries in parallel to keep the click latency under budget.
+        tavily_chunks: list[tuple[str, str]] = []
+        if settings.TAVILY_API_KEY:
+            tav_results = await asyncio.gather(
+                *[_fetch_tavily(client, q) for q in queries],
+                return_exceptions=True,
+            )
+            for q, res in zip(queries, tav_results):
+                if isinstance(res, Exception) or not res:
+                    continue
+                tavily_chunks.append((f"tavily:{q[:40]}", res[:4500]))
+            if tavily_chunks:
+                chunks.extend(tavily_chunks)
+
+        # Always do SearXNG too (more URL diversity for crawling) UNLESS Tavily
+        # already gave us lots of context — saves search budget.
         search_results = await asyncio.gather(
             *[searxng_search(client, q, max_results=6) for q in queries],
             return_exceptions=True,
         )
         urls: list[str] = []
+        non_directory_urls: list[str] = []
         for batch in search_results:
             if isinstance(batch, Exception) or not batch:
                 continue
             for h in batch:
                 u = h.get("url", "")
-                if u and not any(d in u.lower() for d in DIRECTORY_HOSTS) and u not in urls:
-                    urls.append(u)
-        # capture for the company-site picker below
+                if not u or u in urls:
+                    continue
+                urls.append(u)  # all URLs feed the LLM corpus
+                if not any(d in u.lower() for d in DIRECTORY_HOSTS):
+                    non_directory_urls.append(u)
+        # company-website picker (used below) avoids directories.
         global _LAST_SERP_ORGANIC
-        _LAST_SERP_ORGANIC = urls[:8]
+        _LAST_SERP_ORGANIC = non_directory_urls[:8]
 
         # --- Crawl up to 6 top URLs in parallel; build the LLM corpus.
         crawl = urls[:6]
@@ -562,15 +589,36 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
                 if text:
                     chunks.append((label, text[:4500]))
 
+    # Gather Gemini's grounded overview now (was kicked off earlier).
+    ao_block = ""
+    grounded_sources: list[str] = []
+    if grounded_task is not None:
+        try:
+            g = await grounded_task
+            if g and g.get("overview"):
+                ao_block = g["overview"]
+                grounded_sources = g.get("sources") or []
+                chunks.insert(0, ("gemini_grounded", "[GOOGLE AI OVERVIEW]\n" + ao_block))
+        except Exception as e:
+            log.warning("fast.grounded_failed", error=str(e))
+
     if not chunks:
         return {}
 
-    # Extract Google AI Overview block (if SerpAPI captured one).
-    serp = next((t for l, t in chunks if l == "serpapi_google"), "")
-    ao_block = ""
-    if "[GOOGLE AI OVERVIEW]" in serp:
-        after = serp.split("[GOOGLE AI OVERVIEW]", 1)[1].lstrip("\n")
-        ao_block = after.split("\n\n[", 1)[0]
+    # ao_block was set above from Gemini grounding. Fall back to:
+    #   1. Legacy SerpAPI extraction (paid-search mode)
+    #   2. Tavily's `answer` field (works when Tavily key is configured)
+    if not ao_block:
+        serp = next((t for l, t in chunks if l == "serpapi_google"), "")
+        if "[GOOGLE AI OVERVIEW]" in serp:
+            after = serp.split("[GOOGLE AI OVERVIEW]", 1)[1].lstrip("\n")
+            ao_block = after.split("\n\n[", 1)[0]
+    if not ao_block:
+        for label, text in chunks:
+            if label.startswith("tavily:") and "[TAVILY ANSWER]" in text:
+                after = text.split("[TAVILY ANSWER]", 1)[1].lstrip("\n")
+                ao_block = after.split("\n\n[", 1)[0]
+                break
     ao_has_cin = bool(ao_block) and bool(
         re.search(r"[ULul]\d{5}[A-Za-z]{2}\d{4}[A-Za-z]{3}\d{6}",
                   ao_block.replace(" ", "").replace("\n", ""))
@@ -588,24 +636,24 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
         except Exception as e:
             log.warning("fast.company_site_fetch_failed", error=str(e))
 
-    # Rebuild a clean LLM corpus from AO + company website only.
-    if ao_block or site_text:
-        clean_chunks: list[tuple[str, str]] = []
-        if ao_block:
-            clean_chunks.append(("google_ai_overview", "[GOOGLE AI OVERVIEW]\n" + ao_block))
-        if site_text:
-            clean_chunks.append(("company_site", site_text))
-        chunks = clean_chunks
-        log.info("fast.using_clean_corpus", ao=bool(ao_block), site=bool(site_url))
+    # Add the company-site content as an additional high-priority chunk.
+    # Do NOT drop other sources — Tavily/SearXNG snippets often have CIN/RoC
+    # data that the company's own site doesn't list publicly.
+    if site_text:
+        chunks.insert(0, ("company_site", site_text))
+        log.info("fast.added_company_site", url=site_url)
 
     source_text = "\n\n".join(c[1] for c in chunks)
     budget = max(2.0, deadline - asyncio.get_event_loop().time())
-    # Prefer Gemini Flash; fall back to Groq if no key or Gemini returned empty.
+    # LLM cascade: Cerebras (free 1M/day, fast) → Gemini → Groq.
     fields: dict = {}
-    used_gemini = False
-    if settings.GEMINI_API_KEY:
+    used_strong = False
+    if settings.CEREBRAS_API_KEY:
+        fields = await cerebras_extract(name, chunks, timeout_s=budget)
+        used_strong = bool(fields)
+    if not fields and settings.GEMINI_API_KEY:
         fields = await gemini_extract(name, chunks, timeout_s=budget)
-        used_gemini = bool(fields)
+        used_strong = bool(fields)
     if not fields:
         fields = await llm_extract(name, chunks, timeout_s=budget)
     verified = _verify(fields, source_text, name)
@@ -613,7 +661,7 @@ async def fast_enrich(name: str, timeout_s: float = 8.0) -> dict:
     # bypass the strict source-substring gate (Gemini paraphrases more than
     # Groq). We still apply format validators by re-running _verify with a
     # corpus that includes the LLM output itself — keeps the regex checks.
-    if used_gemini and fields.get("cin") and CIN_RE.match(str(fields["cin"])):
+    if used_strong and fields.get("cin") and CIN_RE.match(str(fields["cin"])):
         synth = source_text + "\n" + json.dumps(fields, default=str)
         verified = _verify(fields, synth, name)
     if not verified:

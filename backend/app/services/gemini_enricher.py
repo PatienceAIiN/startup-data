@@ -71,6 +71,63 @@ def _clean_json(s: str) -> Optional[dict]:
     return None
 
 
+async def gemini_grounded_overview(company_name: str, timeout_s: float = 18.0) -> dict:
+    """Ask Gemini to research the company on Google and return a grounded
+    summary. Uses the googleSearch tool which makes Gemini do its own
+    Google search and cite sources — this replaces SerpAPI's AI Overview.
+
+    Returns:
+      {
+        "overview": "plain text grounded answer (acts as AI Overview)",
+        "sources": ["url1", "url2", ...],  # the URLs Gemini grounded on
+      }
+    """
+    if not settings.GEMINI_API_KEY:
+        return {}
+    prompt = (
+        f"Research the Indian company '{company_name}'. Search Google and "
+        "report ONLY verified facts you find. Required structure:\n"
+        "1. A one-paragraph overview.\n"
+        "2. Bulleted key details — use this exact format on each bullet:\n"
+        "   - Label: value\n"
+        "   Required labels (skip those you cannot verify): CIN, "
+        "Incorporation Date, Registered Address, ROC, Authorised Capital, "
+        "Paid-up Capital, Directors, Email, Phone, Website, Industry.\n"
+        "Do NOT invent values. If a fact is unverified, omit that bullet."
+    )
+    body = {
+        "contents": [{"parts": [{"text": prompt}], "role": "user"}],
+        "tools": [{"googleSearch": {}}],
+        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 1500},
+    }
+    url = API_URL.format(model=settings.GEMINI_MODEL)
+    headers = {"Content-Type": "application/json", "X-goog-api-key": settings.GEMINI_API_KEY}
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as c:
+            r = await c.post(url, headers=headers, json=body)
+    except Exception as e:
+        log.warning("gemini_ground.call_failed", error=str(e))
+        return {}
+    if r.status_code != 200:
+        log.warning("gemini_ground.bad_status", status=r.status_code, body=r.text[:200])
+        return {}
+    data = r.json()
+    try:
+        text = data["candidates"][0]["content"]["parts"][0]["text"] or ""
+    except Exception:
+        return {}
+    sources: list[str] = []
+    try:
+        gm = data["candidates"][0].get("groundingMetadata", {})
+        for chunk in gm.get("groundingChunks", []):
+            u = (chunk.get("web") or {}).get("uri") or ""
+            if u and u not in sources:
+                sources.append(u)
+    except Exception:
+        pass
+    return {"overview": text.strip(), "sources": sources}
+
+
 async def gemini_extract(
     company_name: str,
     chunks: list[tuple[str, str]],
